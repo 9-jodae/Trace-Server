@@ -22,14 +22,14 @@ fi
 commit=$(git rev-parse --short HEAD)
 GIT_COMMIT="$commit" docker compose -f compose.prod.yaml up -d --build
 
-attempt=0
-while [ "$attempt" -lt 24 ]; do
-    if curl --fail --silent http://127.0.0.1:8080/api/health; then
+deadline=$(( $(date +%s) + 120 ))
+while [ "$(date +%s)" -lt "$deadline" ]; do
+    remaining=$(( deadline - $(date +%s) ))
+    if curl --fail --silent --connect-timeout 2 --max-time "$remaining" http://127.0.0.1:8080/api/health; then
         echo
         echo "배포 성공: commit=$commit"
         exit 0
     fi
-    attempt=$((attempt + 1))
     sleep 5
 done
 
