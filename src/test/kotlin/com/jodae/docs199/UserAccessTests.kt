@@ -71,3 +71,45 @@ class LoginIntegrationTests : IntegrationTestBase() {
         assertEquals(HttpStatus.UNAUTHORIZED, failed.statusCode)
     }
 }
+
+class DepartmentIntegrationTests : IntegrationTestBase() {
+    @Autowired lateinit var rest: TestRestTemplate
+
+    private fun token(email: String): String {
+        val response =
+            rest.postForEntity(
+                "/api/auth/login",
+                HttpEntity(
+                    """{"email":"$email","password":"local-demo-1234"}""",
+                    HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON },
+                ),
+                String::class.java,
+            )
+        return Regex("\"accessToken\":\"([^\"]+)\"").find(response.body!!)!!.groupValues[1]
+    }
+
+    @Test
+    fun listRequiresAuthenticationAndReturnsAllDepartments() {
+        val anonymous = rest.exchange("/api/departments", HttpMethod.GET, HttpEntity<Void>(HttpHeaders()), String::class.java)
+        assertEquals(HttpStatus.UNAUTHORIZED, anonymous.statusCode)
+
+        val headers = HttpHeaders().apply { setBearerAuth(token("hr.staff@local.docs199")) }
+        val response = rest.exchange("/api/departments", HttpMethod.GET, HttpEntity<Void>(headers), String::class.java)
+        assertEquals(HttpStatus.OK, response.statusCode)
+        listOf("경영지원팀", "인사팀", "개발팀", "영업팀").forEach { name ->
+            assertTrue(response.body!!.contains(name))
+        }
+    }
+
+    @Test
+    fun confidentialAccountsExistForSalesAndHrDemoScenarios() {
+        listOf("sales.manager@local.docs199" to "영업팀", "hr.manager@local.docs199" to "인사팀").forEach { (email, department) ->
+            val headers = HttpHeaders().apply { setBearerAuth(token(email)) }
+            val me = rest.exchange("/api/users/me", HttpMethod.GET, HttpEntity<Void>(headers), String::class.java)
+            assertEquals(HttpStatus.OK, me.statusCode)
+            assertTrue(me.body!!.contains(department))
+            assertTrue(me.body!!.contains("MANAGER"))
+            assertTrue(me.body!!.contains("CONFIDENTIAL"))
+        }
+    }
+}

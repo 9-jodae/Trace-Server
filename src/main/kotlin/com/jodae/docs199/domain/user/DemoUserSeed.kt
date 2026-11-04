@@ -29,6 +29,8 @@ class DemoUserSeed(
                 DemoAccount("ops.director@local.docs199", "경영지원팀 부장", "경영지원팀", Position.DIRECTOR, Role.EMPLOYEE, Clearance.CONFIDENTIAL),
                 DemoAccount("doc.admin@local.docs199", "문서 관리자", "경영지원팀", Position.MANAGER, Role.DOC_ADMIN, Clearance.CONFIDENTIAL),
                 DemoAccount("system.admin@local.docs199", "시스템 관리자", "경영지원팀", Position.DIRECTOR, Role.SYSTEM_ADMIN, Clearance.CONFIDENTIAL),
+                DemoAccount("sales.manager@local.docs199", "영업팀 팀장", "영업팀", Position.MANAGER, Role.EMPLOYEE, Clearance.CONFIDENTIAL),
+                DemoAccount("hr.manager@local.docs199", "인사팀 팀장", "인사팀", Position.MANAGER, Role.EMPLOYEE, Clearance.CONFIDENTIAL),
             )
         accounts.forEach { account ->
             if (users.findByEmail(account.email) == null) {
