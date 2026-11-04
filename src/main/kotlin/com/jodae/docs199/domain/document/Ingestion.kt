@@ -15,6 +15,7 @@ import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
 import org.springframework.web.client.RestClient
 import java.time.Duration
+import java.time.LocalDate
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
@@ -125,13 +126,16 @@ class JobUpdater(
         status: JobStatus,
         error: String?,
         type: DocumentType?,
+        author: String? = null,
+        authoredAt: LocalDate? = null,
     ) {
         val job = repository.job(jobId) ?: throw ApiException(ErrorCode.NOT_FOUND)
         if (status == JobStatus.PENDING) throw ApiException(ErrorCode.INVALID_INPUT)
         val changed = repository.transitionJob(jobId, status, if (status == JobStatus.FAILED) error else null)
-        if (changed && type != null && status == JobStatus.DONE) {
+        if (changed && status == JobStatus.DONE) {
             val version = repository.version(job.versionId) ?: throw ApiException(ErrorCode.NOT_FOUND)
-            repository.updateTypeIfCurrent(version.documentId, version.versionNumber, type)
+            if (type != null) repository.updateTypeIfCurrent(version.documentId, version.versionNumber, type)
+            repository.fillAuthorMetadataIfAbsent(version.documentId, version.versionNumber, author, authoredAt)
         }
     }
 }

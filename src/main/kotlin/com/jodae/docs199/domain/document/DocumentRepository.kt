@@ -8,11 +8,12 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
 import java.sql.ResultSet
+import java.sql.Timestamp
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
-enum class SourceKind { UPLOAD, NOTION }
+enum class SourceKind { LOCAL, OBSIDIAN, NOTION }
 
 enum class DocumentType { HANDOVER, APPROVAL, REPORT, PRESENTATION, ETC }
 
@@ -41,6 +42,8 @@ data class DocumentRecord(
     val minimumPosition: Position?,
     val currentVersion: Int,
     val deletedAt: Instant?,
+    val ownerDepartmentId: UUID? = null,
+    val sourceModifiedAt: Instant? = null,
 )
 
 data class VersionRecord(
@@ -65,11 +68,13 @@ data class JobRecord(
 
 data class DocumentFilter(
     val sourceId: UUID?,
+    val sourceKind: SourceKind?,
     val extension: String?,
     val documentType: DocumentType?,
     val authoredFrom: LocalDate?,
     val authoredTo: LocalDate?,
     val status: JobStatus?,
+    val ownerDepartmentId: UUID? = null,
 )
 
 @Repository
@@ -109,7 +114,8 @@ class DocumentRepository(
     fun insertDocument(document: DocumentRecord) {
         jdbc.update(
             """INSERT INTO documents(id, source_id, external_id, title, relative_path, extension, document_type, author,
-               authored_at, clearance, minimum_position, current_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               authored_at, clearance, minimum_position, current_version, owner_department_id, source_modified_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             document.id,
             document.sourceId,
             document.externalId,
@@ -122,6 +128,48 @@ class DocumentRepository(
             document.clearance.name,
             document.minimumPosition?.name,
             document.currentVersion,
+            document.ownerDepartmentId,
+            document.sourceModifiedAt?.let(Timestamp::from),
+        )
+    }
+
+    fun updateOwnerDepartment(
+        id: UUID,
+        ownerDepartmentId: UUID?,
+    ) {
+        jdbc.update("UPDATE documents SET owner_department_id = ?, updated_at = now() WHERE id = ?", ownerDepartmentId, id)
+    }
+
+    fun updateMetadata(
+        id: UUID,
+        author: String?,
+        authoredAt: LocalDate?,
+        sourceModifiedAt: Instant?,
+    ) {
+        jdbc.update(
+            """UPDATE documents SET author = COALESCE(?, author), authored_at = COALESCE(?, authored_at),
+               source_modified_at = COALESCE(?, source_modified_at), updated_at = now() WHERE id = ?""",
+            author,
+            authoredAt,
+            sourceModifiedAt?.let(Timestamp::from),
+            id,
+        )
+    }
+
+    fun fillAuthorMetadataIfAbsent(
+        documentId: UUID,
+        versionNumber: Int,
+        author: String?,
+        authoredAt: LocalDate?,
+    ) {
+        if (author == null && authoredAt == null) return
+        jdbc.update(
+            """UPDATE documents SET author = COALESCE(author, ?), authored_at = COALESCE(authored_at, ?), updated_at = now()
+               WHERE id = ? AND current_version = ? AND deleted_at IS NULL""",
+            author,
+            authoredAt,
+            documentId,
+            versionNumber,
         )
     }
 
@@ -286,6 +334,14 @@ class DocumentRepository(
             where.append(" AND d.source_id = :sourceId")
             p.addValue("sourceId", it)
         }
+        filter.sourceKind?.let {
+            where.append(" AND EXISTS (SELECT 1 FROM sources s WHERE s.id = d.source_id AND s.kind = :sourceKind)")
+            p.addValue("sourceKind", it.name)
+        }
+        filter.ownerDepartmentId?.let {
+            where.append(" AND d.owner_department_id = :ownerDepartmentId")
+            p.addValue("ownerDepartmentId", it)
+        }
         filter.extension?.let {
             where.append(" AND d.extension = :extension")
             p.addValue("extension", it.lowercase())
@@ -358,6 +414,8 @@ class DocumentRepository(
         rs.getString("minimum_position")?.let(Position::valueOf),
         rs.getInt("current_version"),
         rs.getTimestamp("deleted_at")?.toInstant(),
+        rs.getObject("owner_department_id", UUID::class.java),
+        rs.getTimestamp("source_modified_at")?.toInstant(),
     )
 
     private fun mapVersion(

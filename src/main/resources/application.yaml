@@ -63,7 +63,7 @@ app:
       prefix: ${S3_PREFIX:uploads/}
   ai:
     mode: ${AI_MODE:mock}
-    base-url: ${AI_BASE_URL}
+    base-url: ${AI_BASE_URL:http://ai:8000}
 ---
 spring.config.activate.on-profile: test
 app.ai.mode: mock

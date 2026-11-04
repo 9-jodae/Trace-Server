@@ -7,10 +7,10 @@ if [ -e .env ]; then
 fi
 
 umask 077
-db_password=$(openssl rand -base64 32) || exit 1
-jwt_secret=$(openssl rand -base64 32) || exit 1
-internal_secret=$(openssl rand -base64 32) || exit 1
-demo_password=$(openssl rand -base64 32) || exit 1
+db_password=$(openssl rand -hex 32) || exit 1
+jwt_secret=$(openssl rand -hex 32) || exit 1
+internal_secret=$(openssl rand -hex 32) || exit 1
+demo_password=$(openssl rand -hex 32) || exit 1
 if [ -z "$db_password" ] || [ -z "$jwt_secret" ] || [ -z "$internal_secret" ] || [ -z "$demo_password" ]; then
     echo "설정 중단: 비밀값 생성에 실패했습니다." >&2
     exit 1

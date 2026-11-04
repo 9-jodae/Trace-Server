@@ -23,7 +23,21 @@ services:
       MINIO_ROOT_PASSWORD: localminio123
     ports: ["9000:9000", "9001:9001"]
     volumes: ["minio-data:/data"]
-  # AI server: add a service here once its contract and deployment are agreed.
+  neo4j:
+    image: neo4j:2026.10.1-community
+    environment:
+      NEO4J_AUTH: neo4j/local-only
+      NEO4J_server_memory_heap_max__size: 1G
+      NEO4J_server_memory_pagecache_size: 512M
+    ports: ["7474:7474", "7687:7687"]
+    volumes: ["neo4j-data:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u neo4j -p local-only 'RETURN 1' || exit 1"]
+      interval: 10s
+      retries: 10
+      start_period: 30s
+  # AI server: add a service here once its contract and deployment are agreed. Spring does not connect to Neo4j directly.
 volumes:
   postgres-data:
   minio-data:
+  neo4j-data:
