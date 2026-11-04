@@ -18,7 +18,11 @@ docker compose -f compose.prod.yaml logs --tail=100 app
 
 스크립트는 원격 변경을 가져온 뒤 브랜치를 checkout하고 fast-forward pull만 수행합니다. PostgreSQL 준비를 기다려 앱을 시작하고, 헬스체크가 2분 안에 성공하지 않으면 실패 코드로 종료합니다. 배포 이미지의 `commit`은 빌드 시 짧은 Git SHA입니다. 외부 확인 주소는 `http://3.0.74.114:8080/api/health`입니다. 외부 8080 포트는 health-gateway가 `/api/health`만 전달하며 그 밖의 경로는 404로 거부합니다. 앱의 인증·문서 API는 서버 loopback `127.0.0.1:18080`에서만 접근합니다. `/actuator/health`는 상세 정보를 노출하지 않습니다.
 
-`docker compose -f compose.prod.yaml restart app`으로 앱을 재시작합니다. 로그에는 비밀값, 토큰, 문서 내용, Presigned URL을 남기지 않습니다. PostgreSQL은 외부 포트를 열지 않으며 named volume을 유지합니다. AI 서버는 이번 배포에서 mock 모드입니다.
+`docker compose -f compose.prod.yaml restart app`으로 앱을 재시작합니다. 로그에는 비밀값, 토큰, 문서 내용, Presigned URL을 남기지 않습니다. PostgreSQL과 Neo4j는 호스트 `127.0.0.1`에만 포트를 열어(AI 팀원의 SSH 터널 접속용, [AI 연동 접속 안내](ai-integration-setup.md) 참고) 외부에는 노출하지 않으며 named volume을 유지합니다. AI 서버는 이번 배포에서 mock 모드입니다.
+
+## Neo4j 메모리 제한
+
+Neo4j Community 컨테이너는 힙 1G, 페이지 캐시 512M로 제한합니다. 이 서버는 Spring 앱·PostgreSQL과 함께 여러 팀이 공유하며, 앞으로 AI 서버도 같은 호스트에 올라올 예정입니다. Neo4j의 기본 메모리 설정은 호스트 전체 메모리를 기준으로 자동 계산되어 단독 서버를 가정하므로, 공유 호스트에서는 다른 컨테이너의 메모리를 빼앗지 않도록 명시적으로 낮은 값을 고정합니다. 데모 규모 데이터셋에는 충분한 크기입니다.
 
 ## 롤백
 

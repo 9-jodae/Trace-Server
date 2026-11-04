@@ -11,6 +11,7 @@
 - pgvector 0.8.7 PostgreSQL 18 이미지: https://github.com/pgvector/pgvector#docker
 - ktlint Gradle 플러그인 14.2.0: https://plugins.gradle.org/plugin/org.jlleitschuh.gradle.ktlint
 - Testcontainers 2.0.5: https://java.testcontainers.org/
+- Neo4j Community 2026.10.1 (2026-11-05 확인): https://neo4j.com/release-notes/database/ , 이미지 태그는 https://hub.docker.com/_/neo4j/tags 의 `2026.10.1-community`
 
 Kotlin 2.4.21은 최신 안정 버전이지만 ktlint Gradle 플러그인 14.2.0이 Kotlin 2.4 소스와 Gradle 스크립트를 파싱할 때 `Extensions storage is not registered` 오류가 발생했습니다. 호환 가능한 한 단계 낮은 2.3.21을 고정했고 Spring Initializr 생성값과 일치합니다. 이미지와 의존성은 `latest` 대신 버전을 고정합니다.
 
