@@ -20,3 +20,5 @@ Windows PowerShell에서는 `.\gradlew.bat bootRun`을 사용합니다. `http://
 사용자·조직·문서 접근 규칙은 [접근 권한 안내](docs/access-control.md)를 참고하세요.
 
 소스 생성, 다중 파일 업로드, 버전·처리 상태·직원 조회 API는 [문서 관리 안내](docs/document-management.md)에 정리했습니다.
+
+팀 서버 첫 배포와 운영 명령은 [배포 안내](docs/deployment.md)를 참고하세요.
