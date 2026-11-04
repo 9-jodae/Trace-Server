@@ -4,7 +4,7 @@
 
 서버에서 `docker ps`와 `ss -tlnp`로 다른 팀 서비스와 8080·18080 포트 사용 여부를 먼저 확인합니다. 저장소를 `~/docs199-Server`에 복제하고 `git config core.hooksPath .githooks`를 실행합니다. `.env.prod.example`의 변수 이름을 참고해 **서버의 저장소 루트에만** `.env`를 만듭니다. `.env`는 Git과 Docker 빌드 컨텍스트에서 제외됩니다.
 
-`scripts/init-prod-env.sh`를 실행하면 `DB_PASSWORD`, `JWT_SECRET`, `INTERNAL_SECRET`, `DEMO_PASSWORD`를 각각 `openssl rand -base64 32`로 생성해 `.env`에 기록하고 `chmod 600 .env`를 적용합니다. 기존 `.env`는 덮어쓰지 않습니다. 화면이나 로그에 비밀값을 출력하지 않습니다. 스크립트는 `STORAGE_TYPE=s3`, `S3_BUCKET=hackathon-e3-t09-data`, `S3_PREFIX=uploads/`, `AWS_REGION=ap-southeast-1`, `DEMO_SEED=true`, `CORS_ORIGINS=http://localhost:3000`을 설정합니다. AWS 액세스 키는 만들거나 설정하지 않습니다. 앱 컨테이너는 인스턴스 역할을 SDK 기본 자격 증명 체인으로 사용합니다.
+`scripts/init-prod-env.sh`를 실행하면 `DB_PASSWORD`, `JWT_SECRET`, `INTERNAL_SECRET`, `DEMO_PASSWORD`를 각각 `openssl rand -hex 32`로 생성해 `.env`에 기록하고 `chmod 600 .env`를 적용합니다. `NEO4J_PASSWORD`, `AI_DB_PASSWORD` 등 이후 수동으로 추가하는 비밀값도 같은 방식(`openssl rand -hex 32`)을 씁니다. `base64` 출력은 `/`, `+`, `=`를 포함할 수 있어 `NEO4J_AUTH=neo4j/<password>`처럼 `/`를 구분자로 쓰는 값이나 셸·SQL 인용 규칙과 충돌할 수 있습니다(실제로 `/`가 섞인 `NEO4J_PASSWORD` 때문에 Neo4j 컨테이너가 기동하지 못한 사례가 있었습니다). `hex` 출력은 `[0-9a-f]`만 사용해 이런 충돌이 없습니다. 기존 `.env`는 덮어쓰지 않습니다. 화면이나 로그에 비밀값을 출력하지 않습니다. 스크립트는 `STORAGE_TYPE=s3`, `S3_BUCKET=hackathon-e3-t09-data`, `S3_PREFIX=uploads/`, `AWS_REGION=ap-southeast-1`, `DEMO_SEED=true`, `CORS_ORIGINS=http://localhost:3000`을 설정합니다. AWS 액세스 키는 만들거나 설정하지 않습니다. 앱 컨테이너는 인스턴스 역할을 SDK 기본 자격 증명 체인으로 사용합니다.
 
 ## 배포와 확인
 
