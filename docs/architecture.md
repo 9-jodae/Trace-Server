@@ -5,3 +5,5 @@
 단일 Gradle 모듈의 `global`에는 Web, 보안, 저장소, 영속성, AI 전송 공통 코드가 있습니다. 기능은 `domain/<기능>`에 둡니다. 권한 확인은 Spring 서버에서 수행합니다.
 
 벡터 저장 방식은 [pgvector 안내](pgvector.md)를 참고합니다. AI 계약은 [AI 서버 계약](ai-server-contract.md)에 기록합니다. 로컬 개발용 API는 `local` 프로필에서만 활성화합니다.
+
+문서·버전·처리 작업은 [문서 관리 안내](document-management.md)에 정리했습니다. `chunks`와 `document_links`는 AI 팀 계약 확정 후 추가합니다.
