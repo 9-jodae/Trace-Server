@@ -1,5 +1,6 @@
 package com.jodae.docs199.domain.conversation
 
+import com.jodae.docs199.domain.document.DocumentRecord
 import com.jodae.docs199.domain.document.DocumentRepository
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
@@ -7,7 +8,6 @@ import com.jodae.docs199.global.security.AccessPolicy
 import com.jodae.docs199.global.security.DocumentAccessRule
 import com.jodae.docs199.global.security.UserPrincipal
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 
 data class EvidenceSourceView(
@@ -39,7 +39,6 @@ class QuestionService(
     private val policy: AccessPolicy,
     private val client: AgentChatClient,
 ) {
-    @Transactional
     fun ask(
         principal: UserPrincipal,
         conversationId: UUID?,
@@ -54,17 +53,15 @@ class QuestionService(
                 existing
             }
         conversations.addMessage(principal, conversation.id, MessageRole.USER, message)
+        // AI 호출은 DB 트랜잭션 밖에서 수행한다(최대 70초, 위 두 저장은 이미 각각 커밋됨).
         val response = client.chat(AgentChatRequest(message, conversation.id.toString()))
-        val visible = response.sources.mapNotNull { visibleSource(principal, it) }
+        val visible = visibleSources(principal, response.sources)
         conversations.addMessage(
             principal,
             conversation.id,
             MessageRole.ASSISTANT,
             response.answer,
-            visible
-                .map {
-                    it.id.let(UUID::fromString)
-                }.toSet(),
+            visible.map { UUID.fromString(it.id) }.toSet(),
         )
         return QuestionResponse(
             conversation.id,
@@ -77,24 +74,42 @@ class QuestionService(
         )
     }
 
-    private fun visibleSource(
+    private fun visibleSources(
         principal: UserPrincipal,
-        source: AgentSource,
-    ): EvidenceSourceView? {
-        val chunkId = runCatching { UUID.fromString(source.id) }.getOrNull() ?: return null
-        val documentId = source.documentId?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: return null
-        val document = documents.document(documentId) ?: return null
-        val departments = documents.departments(documentId)
-        if (!policy.canAccess(principal, DocumentAccessRule(document.clearance, departments, document.minimumPosition))) return null
-        return EvidenceSourceView(
-            chunkId.toString(),
-            source.text,
-            source.source,
-            documentId,
-            document.title,
-            source.versionId,
-            source.charStart,
-            source.charEnd,
-        )
+        sources: List<AgentSource>,
+    ): List<EvidenceSourceView> {
+        val byChunkAndDocument =
+            sources.mapNotNull { source ->
+                val chunkId = runCatching { UUID.fromString(source.id) }.getOrNull() ?: return@mapNotNull null
+                val documentId = source.documentId?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: return@mapNotNull null
+                Triple(source, chunkId, documentId)
+            }
+        val documentIds = byChunkAndDocument.map { it.third }.toSet()
+        val documentsById = documents.documents(documentIds)
+        val departmentsById = documents.departmentsBulk(documentIds)
+        return byChunkAndDocument.mapNotNull { (source, chunkId, documentId) ->
+            val document = documentsById[documentId] ?: return@mapNotNull null
+            val departments = departmentsById[documentId].orEmpty()
+            if (!policy.canAccess(principal, DocumentAccessRule(document.clearance, departments, document.minimumPosition))) {
+                return@mapNotNull null
+            }
+            toEvidenceView(source, chunkId, documentId, document)
+        }
     }
+
+    private fun toEvidenceView(
+        source: AgentSource,
+        chunkId: UUID,
+        documentId: UUID,
+        document: DocumentRecord,
+    ) = EvidenceSourceView(
+        chunkId.toString(),
+        source.text,
+        source.source,
+        documentId,
+        document.title,
+        source.versionId,
+        source.charStart,
+        source.charEnd,
+    )
 }

@@ -105,6 +105,14 @@ class DocumentRepository(
     fun document(id: UUID): DocumentRecord? =
         jdbc.query("SELECT * FROM documents WHERE id = ? AND deleted_at IS NULL", ::mapDocument, id).firstOrNull()
 
+    fun documents(ids: Set<UUID>): Map<UUID, DocumentRecord> {
+        if (ids.isEmpty()) return emptyMap()
+        val params = MapSqlParameterSource().addValue("ids", ids)
+        return named
+            .query("SELECT * FROM documents WHERE id IN (:ids) AND deleted_at IS NULL", params, ::mapDocument)
+            .associateBy { it.id }
+    }
+
     fun documentByPath(
         sourceId: UUID,
         path: String,
@@ -220,6 +228,18 @@ class DocumentRepository(
                 { rs, _ -> rs.getObject(1, UUID::class.java) },
                 documentId,
             ).toSet()
+
+    fun departmentsBulk(documentIds: Set<UUID>): Map<UUID, Set<UUID>> {
+        if (documentIds.isEmpty()) return emptyMap()
+        val params = MapSqlParameterSource().addValue("ids", documentIds)
+        return named
+            .query(
+                "SELECT document_id, department_id FROM document_departments WHERE document_id IN (:ids)",
+                params,
+            ) { rs, _ -> rs.getObject("document_id", UUID::class.java) to rs.getObject("department_id", UUID::class.java) }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { it.value.toSet() }
+    }
 
     fun setDepartments(
         documentId: UUID,
