@@ -14,6 +14,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
+import java.io.FilterInputStream
 import java.io.InputStream
 import java.time.Duration
 
@@ -57,12 +58,14 @@ class S3FileStorage(
 
     override fun download(key: String): InputStream =
         safe {
-            client.getObject(
-                GetObjectRequest
-                    .builder()
-                    .bucket(bucket)
-                    .key(objectKey(key))
-                    .build(),
+            SafeInputStream(
+                client.getObject(
+                    GetObjectRequest
+                        .builder()
+                        .bucket(bucket)
+                        .key(objectKey(key))
+                        .build(),
+                ),
             )
         }
 
@@ -100,6 +103,24 @@ class S3FileStorage(
         }
 
     private fun objectKey(key: String) = prefix + key.trimStart('/')
+
+    private inner class SafeInputStream(
+        input: InputStream,
+    ) : FilterInputStream(input) {
+        override fun read(): Int = safe { super.read() }
+
+        override fun read(
+            bytes: ByteArray,
+            offset: Int,
+            length: Int,
+        ): Int = safe { super.read(bytes, offset, length) }
+
+        override fun skip(count: Long): Long = safe { super.skip(count) }
+
+        override fun available(): Int = safe { super.available() }
+
+        override fun close() = safe { super.close() }
+    }
 
     private fun <T> safe(action: () -> T): T =
         try {
