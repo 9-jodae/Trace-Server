@@ -37,6 +37,8 @@ import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.util.LinkedMultiValueMap
 import java.net.URI
 import java.time.Instant
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 class DocumentIntegrationTests : IntegrationTestBase() {
@@ -160,6 +162,62 @@ class DocumentIntegrationTests : IntegrationTestBase() {
         assertEquals(dev.departmentId, repository.document(id)?.ownerDepartmentId)
         service.updateAccess(id, Clearance.PUBLIC, emptySet(), null, hr.departmentId)
         assertEquals(hr.departmentId, repository.document(id)?.ownerDepartmentId)
+    }
+
+    @Test
+    fun uploadAndReviseAcceptAuthorMetadata() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "작성자-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val modified = Instant.now().minusSeconds(3600).truncatedTo(ChronoUnit.MICROS)
+        val id =
+            service
+                .uploadOne(
+                    admin,
+                    source.id,
+                    "author.md",
+                    file("내용"),
+                    null,
+                    null,
+                    null,
+                    null,
+                    "홍길동",
+                    LocalDate.of(2026, 1, 1),
+                    modified,
+                ).documentId!!
+        assertEquals("홍길동", repository.document(id)?.author)
+        assertEquals(LocalDate.of(2026, 1, 1), repository.document(id)?.authoredAt)
+        assertEquals(modified, repository.document(id)?.sourceModifiedAt)
+
+        service.uploadOne(admin, source.id, "author.md", file("개정 내용"), null, null, null, null, "김철수", null, null)
+        assertEquals("김철수", repository.document(id)?.author)
+        assertEquals(LocalDate.of(2026, 1, 1), repository.document(id)?.authoredAt)
+    }
+
+    @Test
+    fun aiCallbackFillsMissingAuthorButNeverOverwritesUserInput() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "콜백메타-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId = UUID.randomUUID()
+        repository.insertDocument(
+            DocumentRecord(documentId, source.id, "meta.md", "meta", "meta.md", "md", null, null, null, Clearance.PUBLIC, null, 0, null),
+        )
+        val versionId = UUID.randomUUID()
+        repository.addVersion(VersionRecord(versionId, documentId, 1, "test/$versionId", 1, "f".repeat(64), admin.userId, Instant.now()))
+        repository.updateVersion(documentId, 1)
+        val job = jobs.create(versionId)
+        jobs.result(job, JobStatus.DONE, null, null, "AI 추출 이름", LocalDate.of(2025, 5, 5))
+        assertEquals("AI 추출 이름", repository.document(documentId)?.author)
+        assertEquals(LocalDate.of(2025, 5, 5), repository.document(documentId)?.authoredAt)
+
+        repository.updateMetadata(documentId, "사용자 입력", null, null)
+        val secondVersionId = UUID.randomUUID()
+        repository.addVersion(
+            VersionRecord(secondVersionId, documentId, 2, "test/$secondVersionId", 1, "g".repeat(64), admin.userId, Instant.now()),
+        )
+        repository.updateVersion(documentId, 2)
+        val secondJob = jobs.create(secondVersionId)
+        jobs.result(secondJob, JobStatus.DONE, null, null, "AI가 다시 추출한 이름", LocalDate.of(2030, 1, 1))
+        assertEquals("사용자 입력", repository.document(documentId)?.author)
     }
 
     @Test

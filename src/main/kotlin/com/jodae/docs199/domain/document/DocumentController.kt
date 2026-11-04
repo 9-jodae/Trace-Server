@@ -93,6 +93,9 @@ class AdminDocumentController(
         @RequestParam(required = false) departmentIds: Set<UUID>?,
         @RequestParam(required = false) minimumPosition: Position?,
         @RequestParam(required = false) ownerDepartmentId: UUID?,
+        @RequestParam(required = false) author: String?,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) authoredAt: LocalDate?,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) sourceModifiedAt: Instant?,
     ): ApiResponse<List<UploadResult>> {
         if (files.size != paths.size) throw ApiException(ErrorCode.INVALID_INPUT, "파일과 상대 경로의 개수가 다릅니다")
         return ApiResponse.ok(
@@ -106,6 +109,9 @@ class AdminDocumentController(
                     departmentIds,
                     minimumPosition,
                     ownerDepartmentId,
+                    author,
+                    authoredAt,
+                    sourceModifiedAt,
                 )
             },
         )
@@ -156,9 +162,26 @@ class AdminDocumentController(
         @CurrentUser principal: UserPrincipal,
         @PathVariable id: UUID,
         @RequestPart file: MultipartFile,
+        @RequestParam(required = false) author: String?,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) authoredAt: LocalDate?,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) sourceModifiedAt: Instant?,
     ): ApiResponse<UploadResult> {
         val document = service.detail(principal, id, true).document
-        return ApiResponse.ok(service.uploadOne(principal, document.sourceId, document.relativePath, file, null, null, null))
+        return ApiResponse.ok(
+            service.uploadOne(
+                principal,
+                document.sourceId,
+                document.relativePath,
+                file,
+                null,
+                null,
+                null,
+                null,
+                author,
+                authoredAt,
+                sourceModifiedAt,
+            ),
+        )
     }
 
     @DeleteMapping("/documents/{id}")
@@ -241,6 +264,8 @@ data class IngestionResultRequest(
     val status: JobStatus,
     val errorMessage: String?,
     val documentType: DocumentType?,
+    val author: String? = null,
+    val authoredAt: LocalDate? = null,
 )
 
 @RestController
@@ -257,7 +282,7 @@ class IngestionCallbackController(
     ): ApiResponse<Map<String, Boolean>> {
         val actual = supplied?.toByteArray(Charsets.UTF_8) ?: ByteArray(0)
         if (!MessageDigest.isEqual(secret.toByteArray(Charsets.UTF_8), actual)) throw ApiException(ErrorCode.FORBIDDEN)
-        jobs.result(id, request.status, request.errorMessage, request.documentType)
+        jobs.result(id, request.status, request.errorMessage, request.documentType, request.author, request.authoredAt)
         return ApiResponse.ok(mapOf("accepted" to true))
     }
 }

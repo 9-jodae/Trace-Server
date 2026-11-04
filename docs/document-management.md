@@ -6,7 +6,9 @@
 
 관리 목록·상세·권한 변경·개정·소프트 삭제·다운로드 URL·job 조회는 `/api/admin/documents`와 `/api/admin/ingestion-jobs/{id}`에서 제공합니다. 직원 목록·상세·다운로드 URL·상태는 `/api/documents` 아래에서 제공합니다. 직원 목록은 `AccessScope` SQL 조건으로, 상세와 URL은 `AccessPolicy`로 검사합니다. 목록 필터는 `sourceId`, `sourceKind`, `extension`, `documentType`, `authoredFrom`, `authoredTo`, `status`, `ownerDepartmentId`, `page`, `size`입니다. 목록 크기는 1~100입니다. 소유 부서는 `PATCH /api/admin/documents/{id}/access`의 `ownerDepartmentId` 필드로도 변경할 수 있으며, 값을 보내지 않으면 기존 소유 부서가 유지됩니다.
 
-**가정:** 업로드 상대 경로를 소스 내 고유 외부 ID로 씁니다. 소프트 삭제한 같은 경로를 다시 올리면 기존 문서의 다음 버전으로 복구합니다. 개정에는 기존 권한을 유지합니다. 작성자·작성일은 현재 API에서 입력받지 않아 `NULL`이며 추후 메타데이터 계약이 정해지면 확장합니다.
+업로드·개정 API는 `author`(작성자), `authoredAt`(작성일), `sourceModifiedAt`(원본 수정 시각)을 선택 입력으로 받습니다. 값을 보내지 않으면 기존 값을 유지합니다(최초 업로드에서는 `NULL`). AI 처리 콜백(`POST /api/internal/ingestion-jobs/{id}/result`)도 같은 이름의 `author`, `authoredAt`을 선택적으로 보낼 수 있으며, **사용자가 이미 입력한 값이 있으면 덮어쓰지 않습니다**(`author`/`authoredAt`이 이미 채워진 문서는 콜백 값을 무시). **가정(AI 팀 확인 필요, [AI 연동 계약](ai-server-contract.md) 참고):** 이 "사용자 우선" 정책은 임시 결정이며, AI 추출 신뢰도가 더 높은 경우의 처리 방식은 AI 팀과 재논의가 필요합니다. `sourceModifiedAt`은 현재 콜백으로는 채울 수 없고 업로드·개정 API 입력만 반영합니다.
+
+**가정:** 업로드 상대 경로를 소스 내 고유 외부 ID로 씁니다. 소프트 삭제한 같은 경로를 다시 올리면 기존 문서의 다음 버전으로 복구합니다. 개정에는 기존 권한을 유지합니다.
 
 DB 트랜잭션이 롤백되면 업로드한 객체를 삭제합니다. 삭제가 실패하면 `storage_cleanup_jobs`에 남기고 주기적으로 다시 시도합니다. DB까지 사용할 수 없어 정리 예약에 실패한 경우는 로그의 예외 유형으로 확인해야 합니다. 별도 분산 트랜잭션은 사용하지 않습니다.
 

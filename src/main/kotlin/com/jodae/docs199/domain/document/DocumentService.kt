@@ -20,6 +20,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile
 import java.security.MessageDigest
 import java.time.Duration
+import java.time.Instant
+import java.time.LocalDate
 import java.util.UUID
 
 data class UploadResult(
@@ -82,6 +84,9 @@ class DocumentService(
         departments: Set<UUID>?,
         minimumPosition: Position?,
         ownerDepartmentId: UUID? = null,
+        author: String? = null,
+        authoredAt: LocalDate? = null,
+        sourceModifiedAt: Instant? = null,
     ): UploadResult {
         val normalized = path.replace('\\', '/').trim('/')
         val parts = normalized.split('/')
@@ -119,13 +124,14 @@ class DocumentService(
                     normalized,
                     extension,
                     null,
-                    null,
-                    null,
+                    author,
+                    authoredAt,
                     clearance ?: source.defaultClearance,
                     minimumPosition,
                     0,
                     null,
                     effectiveOwner,
+                    sourceModifiedAt,
                 ),
             )
             repository.setDepartments(documentId, effectiveDepartments)
@@ -137,6 +143,9 @@ class DocumentService(
             if (ownerDepartmentId != null) {
                 validateDepartments(setOf(ownerDepartmentId))
                 repository.updateOwnerDepartment(documentId, ownerDepartmentId)
+            }
+            if (author != null || authoredAt != null || sourceModifiedAt != null) {
+                repository.updateMetadata(documentId, author, authoredAt, sourceModifiedAt)
             }
         }
         val versionId = UUID.randomUUID()
@@ -160,7 +169,7 @@ class DocumentService(
             },
         )
         repository.addVersion(
-            VersionRecord(versionId, documentId, number, key, bytes.size.toLong(), hash, principal.userId, java.time.Instant.now()),
+            VersionRecord(versionId, documentId, number, key, bytes.size.toLong(), hash, principal.userId, Instant.now()),
         )
         repository.updateVersion(documentId, number)
         events.publishEvent(VersionCreated(versionId))
