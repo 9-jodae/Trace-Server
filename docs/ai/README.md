@@ -4,6 +4,13 @@ Read `AGENTS.md` first. Then read the workflow for the task and any relevant rul
 
 Priority: explicit user request, `AGENTS.md`, applicable `docs/ai/` workflow or rule, then tool-specific wrapper. Edit shared rules only in `AGENTS.md` or `docs/ai/`; keep `.claude/skills/` and `.codex/prompts/` thin.
 
+| Claude skill | Codex skill | Manual Codex prompt | Shared workflow |
+| --- | --- | --- | --- |
+| `add-domain` | `add-domain` | `add-domain.md` | `workflows/add-domain.md` |
+| `verify` | `verify` | `verify-changes.md` | `workflows/verify.md` |
+| `commit-and-pr` | `commit-and-pr` | `commit-and-pr.md` | `workflows/commit-and-pr.md` |
+| `review-response` | `review-response` | `review-response.md` | `workflows/review-response.md` |
+
 | Task | Workflow | Rules |
 | --- | --- | --- |
 | Add a domain | `workflows/add-domain.md` | `rules/spring-kotlin.md`, `rules/testing.md`, `rules/security.md` |

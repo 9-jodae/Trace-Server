@@ -17,7 +17,13 @@
       "Bash(git push origin main)",
       "Bash(git push origin develop)",
       "Bash(git push origin HEAD:main)",
-      "Bash(git push origin HEAD:develop)"
+      "Bash(git push origin HEAD:develop)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)",
+      "Bash(git push *+*)",
+      "Bash(git rebase *)"
     ]
   }
 }
