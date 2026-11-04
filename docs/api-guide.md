@@ -152,10 +152,24 @@ DELETE /api/conversations/{id}
 
 응답 `data`: `{"deleted": true}`.
 
+## 질문
+
+최소 버전입니다([Issue #20](https://github.com/9-jodae/docs199-Server/issues/20) 참고, 완전한 근거 조회 API는 아직 없음).
+
+```http
+POST /api/conversations/messages        (새 대화)
+POST /api/conversations/{id}/messages   (기존 대화에 이어서 질문, 본인 대화만 가능)
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{"message": "연차는 며칠까지 이월할 수 있나요?"}
+```
+
+응답 `data`: `{"conversationId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","documentTitle","versionId","charStart","charEnd"}], "failedSources", "fallbackReason"}`. `sources`는 사용자가 접근할 수 없는 문서의 출처를 제외한 목록입니다. SSE가 아닌 단건 응답이며, AI 서버 처리 시간 때문에 최대 70초까지 걸릴 수 있습니다. 다른 사람의 대화 ID로 질문하면 `NOT_FOUND`입니다.
+
 ## 아직 준비 중인 것
 
-- **질문 API**: 질문을 보내고 답변·근거를 받는 API([Issue #20](https://github.com/9-jodae/docs199-Server/issues/20)). AI 연동 계약이 확정되는 대로 추가됩니다.
-- **근거 조회 API**: 답변의 근거(문서·위치·인용)를 조회하는 API([Issue #21](https://github.com/9-jodae/docs199-Server/issues/21)).
-- **문서 관계 그래프 API**: 문서 간 참조·유사도 그래프([Issue #15](https://github.com/9-jodae/docs199-Server/issues/15) 이후).
+- **근거 조회 API**: 근거를 단독으로 다시 조회하는 API([Issue #21](https://github.com/9-jodae/docs199-Server/issues/21)). 지금은 질문 응답의 `sources`로만 근거를 받습니다.
+- **문서 관계 그래프 API**: 문서 간 참조·유사도 그래프([Issue #15](https://github.com/9-jodae/docs199-Server/issues/15) 이후, 벡터 저장소 확정 대기 중).
 
-이 셋은 화면 설계를 먼저 시작해도 되지만, 실제 연동은 해당 Issue가 닫힌 뒤에 가능합니다.
+화면 설계를 먼저 시작해도 되지만, 실제 연동은 해당 Issue가 닫힌 뒤에 가능합니다.

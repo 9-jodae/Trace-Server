@@ -37,6 +37,7 @@ app:
     base-url: ${AI_BASE_URL:http://localhost:8000}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     retry-count: ${AI_RETRY_COUNT:0}
+    chat-timeout-seconds: ${AI_CHAT_TIMEOUT_SECONDS:70}
 ---
 spring.config.activate.on-profile: local
 springdoc.api-docs.enabled: true
