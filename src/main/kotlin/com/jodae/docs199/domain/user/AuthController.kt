@@ -72,13 +72,16 @@ class AuthController(
     private val passwords: PasswordEncoder,
     private val tokens: TokenService,
 ) {
+    private val dummyPasswordHash = requireNotNull(passwords.encode("not-a-real-account"))
+
     @PostMapping("/api/auth/login")
     @SecurityRequirements
     fun login(
         @Valid @RequestBody request: LoginRequest,
     ): ApiResponse<Map<String, String>> {
         val user = users.findByEmail(request.email)
-        if (user == null || !passwords.matches(request.password, user.passwordHash)) {
+        val hash = user?.passwordHash ?: dummyPasswordHash
+        if (!passwords.matches(request.password, hash) || user == null) {
             throw ApiException(ErrorCode.UNAUTHENTICATED)
         }
         return ApiResponse.ok(tokens.issue(user))

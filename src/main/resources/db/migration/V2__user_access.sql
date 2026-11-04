@@ -3,22 +3,18 @@ CREATE TABLE departments (
     name VARCHAR(100) NOT NULL UNIQUE
 );
 
-ALTER TABLE app_users RENAME TO users;
-ALTER TABLE users DROP COLUMN role;
-ALTER TABLE users DROP COLUMN department;
-ALTER TABLE users DROP COLUMN position;
-ALTER TABLE users ADD COLUMN email VARCHAR(255);
-ALTER TABLE users ADD COLUMN password_hash VARCHAR(255);
-ALTER TABLE users ADD COLUMN name VARCHAR(100);
-ALTER TABLE users ADD COLUMN department_id UUID REFERENCES departments(id);
-ALTER TABLE users ADD COLUMN position VARCHAR(30);
-ALTER TABLE users ADD COLUMN role VARCHAR(30);
-ALTER TABLE users ADD COLUMN clearance VARCHAR(30);
-ALTER TABLE users ALTER COLUMN email SET NOT NULL;
-ALTER TABLE users ALTER COLUMN password_hash SET NOT NULL;
-ALTER TABLE users ALTER COLUMN name SET NOT NULL;
-ALTER TABLE users ALTER COLUMN department_id SET NOT NULL;
-ALTER TABLE users ALTER COLUMN position SET NOT NULL;
-ALTER TABLE users ALTER COLUMN role SET NOT NULL;
-ALTER TABLE users ALTER COLUMN clearance SET NOT NULL;
-ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email);
+-- V1 사용자 행에는 이메일과 비밀번호가 없어 원본을 별도 테이블에 보존합니다.
+ALTER TABLE app_users RENAME TO legacy_app_users;
+
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    department_id UUID NOT NULL REFERENCES departments(id),
+    position VARCHAR(30) NOT NULL,
+    role VARCHAR(30) NOT NULL,
+    clearance VARCHAR(30) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
