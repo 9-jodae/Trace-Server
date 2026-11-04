@@ -1,5 +1,8 @@
 package com.jodae.docs199.global.security
 
+import com.jodae.docs199.domain.user.Clearance
+import com.jodae.docs199.domain.user.Position
+import com.jodae.docs199.domain.user.Role
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
 import org.springframework.context.annotation.Configuration
@@ -34,12 +37,15 @@ class CurrentUserResolver :
             SecurityContextHolder.getContext().authentication?.principal as? Jwt
                 ?: throw ApiException(ErrorCode.UNAUTHENTICATED)
         val userId = runCatching { UUID.fromString(jwt.subject) }.getOrElse { throw ApiException(ErrorCode.UNAUTHENTICATED) }
-        return UserPrincipal(
-            userId,
-            jwt.getClaimAsString("role") ?: throw ApiException(ErrorCode.UNAUTHENTICATED),
-            jwt.getClaimAsString("department") ?: throw ApiException(ErrorCode.UNAUTHENTICATED),
-            jwt.getClaimAsString("position") ?: throw ApiException(ErrorCode.UNAUTHENTICATED),
-        )
+        return runCatching {
+            UserPrincipal(
+                userId,
+                Role.valueOf(requireNotNull(jwt.getClaimAsString("role"))),
+                UUID.fromString(requireNotNull(jwt.getClaimAsString("departmentId"))),
+                Position.valueOf(requireNotNull(jwt.getClaimAsString("position"))),
+                Clearance.valueOf(requireNotNull(jwt.getClaimAsString("clearance"))),
+            )
+        }.getOrElse { throw ApiException(ErrorCode.UNAUTHENTICATED) }
     }
 
     override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
