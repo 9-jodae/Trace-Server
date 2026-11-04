@@ -2,6 +2,8 @@ package com.jodae.docs199.global.error
 
 import com.jodae.docs199.global.response.ApiResponse
 import jakarta.validation.ConstraintViolationException
+import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -13,6 +15,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     @ExceptionHandler(ApiException::class)
     fun api(ex: ApiException) = ResponseEntity.status(ex.code.status).body(ApiResponse.fail(ex.code.name, ex.message))
 
@@ -45,6 +49,8 @@ class GlobalExceptionHandler {
         ResponseEntity.status(404).body(ApiResponse.fail(ErrorCode.NOT_FOUND.name, ErrorCode.NOT_FOUND.message))
 
     @ExceptionHandler(Exception::class)
-    fun unknown(ex: Exception): ResponseEntity<ApiResponse<Nothing>> =
-        ResponseEntity.internalServerError().body(ApiResponse.fail(ErrorCode.INTERNAL_ERROR.name, ErrorCode.INTERNAL_ERROR.message))
+    fun unknown(ex: Exception): ResponseEntity<ApiResponse<Nothing>> {
+        logger.error("요청 처리 실패 requestId={}", MDC.get("requestId"), ex)
+        return ResponseEntity.internalServerError().body(ApiResponse.fail(ErrorCode.INTERNAL_ERROR.name, ErrorCode.INTERNAL_ERROR.message))
+    }
 }

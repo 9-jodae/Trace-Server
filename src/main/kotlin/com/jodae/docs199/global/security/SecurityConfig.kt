@@ -1,5 +1,6 @@
 package com.jodae.docs199.global.security
 
+import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.response.ApiResponse
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import com.nimbusds.jose.proc.SecurityContext
@@ -94,20 +95,18 @@ class SecurityConfig(
                     .authenticated()
             }.oauth2ResourceServer { it.jwt { jwt -> jwt.jwtAuthenticationConverter(converter) } }
             .exceptionHandling {
-                it.authenticationEntryPoint { _, response, _ -> error(response, 401, "UNAUTHENTICATED", "Authentication required") }
-                it.accessDeniedHandler { _, response, _ -> error(response, 403, "FORBIDDEN", "Access denied") }
+                it.authenticationEntryPoint { _, response, _ -> error(response, ErrorCode.UNAUTHENTICATED) }
+                it.accessDeniedHandler { _, response, _ -> error(response, ErrorCode.FORBIDDEN) }
             }
         return http.build()
     }
 
     private fun error(
         response: HttpServletResponse,
-        status: Int,
-        code: String,
-        message: String,
+        code: ErrorCode,
     ) {
-        response.status = status
+        response.status = code.status.value()
         response.contentType = MediaType.APPLICATION_JSON_VALUE
-        mapper.writeValue(response.outputStream, ApiResponse.fail(code, message))
+        mapper.writeValue(response.outputStream, ApiResponse.fail(code.name, code.message))
     }
 }

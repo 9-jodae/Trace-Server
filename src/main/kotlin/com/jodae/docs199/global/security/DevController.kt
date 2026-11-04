@@ -1,14 +1,10 @@
 package com.jodae.docs199.global.security
 
-import com.jodae.docs199.global.error.ApiException
-import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.response.ApiResponse
 import io.swagger.v3.oas.annotations.security.SecurityRequirements
 import org.springframework.context.annotation.Profile
-import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm
 import org.springframework.security.oauth2.jwt.JwsHeader
-import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.jwt.JwtClaimsSet
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
@@ -46,19 +42,6 @@ class DevController(
 
     @GetMapping("/me")
     fun me(
-        @AuthenticationPrincipal jwt: Jwt,
-    ): ApiResponse<UserPrincipal> =
-        ApiResponse.ok(
-            UserPrincipal(
-                UUID.fromString(jwt.subject ?: throw ApiException(ErrorCode.UNAUTHENTICATED)),
-                jwt.getClaimAsString("role") ?: "",
-                jwt.getClaimAsString("department") ?: "",
-                jwt.getClaimAsString("position") ?: "",
-            ),
-        )
-
-    @GetMapping("/uuid/{id}")
-    fun uuid(
-        @org.springframework.web.bind.annotation.PathVariable id: UUID,
-    ) = ApiResponse.ok(mapOf("id" to id))
+        @CurrentUser principal: UserPrincipal,
+    ): ApiResponse<UserPrincipal> = ApiResponse.ok(principal)
 }
