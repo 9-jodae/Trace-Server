@@ -8,7 +8,7 @@
 {"jobId":"UUID","versionId":"UUID","storageKey":"documents/...","extension":"pdf"}
 ```
 
-`AI_MODE=mock`에서는 잠시 뒤 `PROCESSING` → `DONE`으로 바꾸고 `md`를 `HANDOVER`, 다른 확장자를 `ETC`로 임시 분류합니다. 이는 실제 AI 분류 규칙이 아닙니다.
+`AI_MODE=mock`에서는 잠시 뒤 `PROCESSING` → `DONE`으로 바꾸고 `md`를 `HANDOVER`, 다른 확장자를 `ETC`로 임시 분류합니다. 이는 실제 AI 분류 규칙이 아닙니다. PENDING 작업은 복구 시 같은 `jobId`로 다시 제출될 수 있으므로 AI 서버는 `jobId` 기준 멱등 처리가 필요합니다.
 
 AI 서버는 `POST /api/internal/ingestion-jobs/{id}/result`에 같은 공유 비밀 헤더와 다음 JSON을 보냅니다.
 
@@ -16,7 +16,7 @@ AI 서버는 `POST /api/internal/ingestion-jobs/{id}/result`에 같은 공유 �
 {"status":"DONE","errorMessage":null,"documentType":"REPORT"}
 ```
 
-`status`는 `PROCESSING`, `DONE`, `FAILED`를 받습니다. `errorMessage`와 `documentType`은 선택적입니다. 공유 비밀은 `INTERNAL_SECRET` 환경 변수로 전달합니다. **AI 팀 확인 필요:** 요청·콜백 필드, 스토리지 접근 방법, 멱등성, 실패 재시도, 비밀 회전, callback 상태 전이.
+`status`는 `PROCESSING`, `DONE`, `FAILED`를 받습니다. `errorMessage`와 `documentType`은 선택적입니다. `PENDING → PROCESSING/DONE/FAILED`, `PROCESSING → DONE/FAILED`만 반영하고 종료 상태 이후 콜백은 무시합니다. 문서 유형은 현재 버전의 `DONE` 결과만 반영합니다. 공유 비밀은 `INTERNAL_SECRET` 환경 변수로 전달합니다. **AI 팀 확인 필요:** 요청·콜백 필드, 스토리지 접근 방법, `jobId` 멱등성, 실패 재시도, 비밀 회전.
 
 ## 질문·검색 계약 — 결정 필요
 

@@ -4,6 +4,9 @@ import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.context.annotation.Configuration
+import org.springframework.scheduling.annotation.EnableScheduling
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Propagation
@@ -29,6 +32,10 @@ data class IngestRequest(
 interface IngestionClient {
     fun submit(request: IngestRequest)
 }
+
+@Configuration
+@EnableScheduling
+class IngestionSchedulingConfig
 
 @Component
 @ConditionalOnProperty(name = ["app.ai.mode"], havingValue = "mock")
@@ -83,15 +90,11 @@ class JobUpdater(
     private val repository: DocumentRepository,
 ) {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    fun create(versionId: UUID): UUID {
-        val jobId = UUID.randomUUID()
-        repository.createJob(jobId, versionId)
-        return jobId
-    }
+    fun create(versionId: UUID): UUID = repository.createJob(UUID.randomUUID(), versionId)
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     fun processing(jobId: UUID) {
-        repository.updateJob(jobId, JobStatus.PROCESSING, null)
+        repository.transitionJob(jobId, JobStatus.PROCESSING, null)
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -101,8 +104,19 @@ class JobUpdater(
     ) {
         val job = repository.job(jobId) ?: return
         val version = repository.version(job.versionId) ?: return
-        repository.updateType(version.documentId, if (extension == "md") DocumentType.HANDOVER else DocumentType.ETC)
-        repository.updateJob(jobId, JobStatus.DONE, null)
+        if (repository.transitionJob(jobId, JobStatus.DONE, null)) {
+            repository.updateTypeIfCurrent(
+                version.documentId,
+                version.versionNumber,
+                if (extension ==
+                    "md"
+                ) {
+                    DocumentType.HANDOVER
+                } else {
+                    DocumentType.ETC
+                },
+            )
+        }
     }
 
     @Transactional
@@ -114,10 +128,10 @@ class JobUpdater(
     ) {
         val job = repository.job(jobId) ?: throw ApiException(ErrorCode.NOT_FOUND)
         if (status == JobStatus.PENDING) throw ApiException(ErrorCode.INVALID_INPUT)
-        repository.updateJob(jobId, status, error)
-        if (type != null && status == JobStatus.DONE) {
+        val changed = repository.transitionJob(jobId, status, if (status == JobStatus.FAILED) error else null)
+        if (changed && type != null && status == JobStatus.DONE) {
             val version = repository.version(job.versionId) ?: throw ApiException(ErrorCode.NOT_FOUND)
-            repository.updateType(version.documentId, type)
+            repository.updateTypeIfCurrent(version.documentId, version.versionNumber, type)
         }
     }
 }
@@ -131,6 +145,18 @@ class IngestionAfterCommit(
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     fun created(event: VersionCreated) {
         val version = repository.version(event.versionId) ?: return
+        submit(version)
+    }
+
+    @Scheduled(
+        fixedDelayString = "\${app.ingestion.recovery-interval-ms:60000}",
+        initialDelayString = "\${app.ingestion.recovery-interval-ms:60000}",
+    )
+    fun recover() {
+        repository.versionsNeedingIngestion().forEach(::submit)
+    }
+
+    private fun submit(version: VersionRecord) {
         val jobId = jobs.create(version.id)
         try {
             client.submit(IngestRequest(jobId, version.id, version.storageKey, repository.document(version.documentId)?.extension ?: ""))

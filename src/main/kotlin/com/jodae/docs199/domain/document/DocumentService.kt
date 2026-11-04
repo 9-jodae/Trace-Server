@@ -10,10 +10,13 @@ import com.jodae.docs199.global.security.AccessPolicy
 import com.jodae.docs199.global.security.DocumentAccessRule
 import com.jodae.docs199.global.security.UserPrincipal
 import com.jodae.docs199.global.storage.FileStorage
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile
 import java.security.MessageDigest
 import java.time.Duration
@@ -41,8 +44,10 @@ class DocumentService(
     private val policy: AccessPolicy,
     private val departments: DepartmentRepository,
     private val events: ApplicationEventPublisher,
+    private val cleanupQueue: StorageCleanupQueue,
     @Value("\${app.documents.allowed-extensions:pdf,md}") allowedExtensions: String,
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
     private val allowed =
         allowedExtensions
             .split(',')
@@ -127,6 +132,23 @@ class DocumentService(
         val versionId = UUID.randomUUID()
         val key = "documents/$documentId/$versionId"
         storage.upload(key, bytes.inputStream(), bytes.size.toLong(), file.contentType ?: "application/octet-stream")
+        TransactionSynchronizationManager.registerSynchronization(
+            object : TransactionSynchronization {
+                override fun afterCompletion(status: Int) {
+                    if (status != TransactionSynchronization.STATUS_COMMITTED) {
+                        try {
+                            storage.delete(key)
+                        } catch (ex: Exception) {
+                            try {
+                                cleanupQueue.enqueue(key)
+                            } catch (queueError: Exception) {
+                                logger.error("저장소 보상 정리 예약 실패 exceptionType={}", queueError.javaClass.simpleName)
+                            }
+                        }
+                    }
+                }
+            },
+        )
         repository.addVersion(
             VersionRecord(versionId, documentId, number, key, bytes.size.toLong(), hash, principal.userId, java.time.Instant.now()),
         )

@@ -1,15 +1,23 @@
 package com.jodae.docs199
 
 import com.jodae.docs199.domain.document.DocumentFilter
+import com.jodae.docs199.domain.document.DocumentRecord
 import com.jodae.docs199.domain.document.DocumentRepository
 import com.jodae.docs199.domain.document.DocumentService
+import com.jodae.docs199.domain.document.DocumentType
+import com.jodae.docs199.domain.document.IngestionAfterCommit
 import com.jodae.docs199.domain.document.JobStatus
+import com.jodae.docs199.domain.document.JobUpdater
 import com.jodae.docs199.domain.document.SourceKind
+import com.jodae.docs199.domain.document.StorageCleanupQueue
+import com.jodae.docs199.domain.document.StorageCleanupWorker
+import com.jodae.docs199.domain.document.VersionRecord
 import com.jodae.docs199.domain.user.Clearance
 import com.jodae.docs199.domain.user.Position
 import com.jodae.docs199.domain.user.UserRepository
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.security.UserPrincipal
+import com.jodae.docs199.global.storage.FileStorage
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -24,8 +32,11 @@ import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.mock.web.MockMultipartFile
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.util.LinkedMultiValueMap
 import java.net.URI
+import java.time.Instant
 import java.util.UUID
 
 class DocumentIntegrationTests : IntegrationTestBase() {
@@ -36,6 +47,18 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     @Autowired lateinit var users: UserRepository
 
     @Autowired lateinit var rest: TestRestTemplate
+
+    @Autowired lateinit var jobs: JobUpdater
+
+    @Autowired lateinit var ingestion: IngestionAfterCommit
+
+    @Autowired lateinit var storage: FileStorage
+
+    @Autowired lateinit var cleanupQueue: StorageCleanupQueue
+
+    @Autowired lateinit var cleanupWorker: StorageCleanupWorker
+
+    @Autowired lateinit var transactions: PlatformTransactionManager
 
     private fun principal(email: String): UserPrincipal {
         val user = users.findByEmail(email)!!
@@ -160,5 +183,114 @@ class DocumentIntegrationTests : IntegrationTestBase() {
             )
         assertEquals(HttpStatus.OK, visible.statusCode)
         assertTrue(visible.body!!.contains("from-api.md"))
+    }
+
+    @Test
+    fun staleAndDuplicateCallbacksDoNotChangeLatestVersion() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.UPLOAD, "콜백-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId = UUID.randomUUID()
+        repository.insertDocument(
+            DocumentRecord(
+                documentId,
+                source.id,
+                "callback.md",
+                "callback",
+                "callback.md",
+                "md",
+                null,
+                null,
+                null,
+                Clearance.PUBLIC,
+                null,
+                0,
+                null,
+            ),
+        )
+        val firstId = UUID.randomUUID()
+        val secondId = UUID.randomUUID()
+        repository.addVersion(VersionRecord(firstId, documentId, 1, "test/$firstId", 1, "a".repeat(64), admin.userId, Instant.now()))
+        repository.addVersion(VersionRecord(secondId, documentId, 2, "test/$secondId", 1, "b".repeat(64), admin.userId, Instant.now()))
+        repository.updateVersion(documentId, 2)
+        val firstJob = jobs.create(firstId)
+        val secondJob = jobs.create(secondId)
+        jobs.result(firstJob, JobStatus.DONE, null, DocumentType.REPORT)
+        assertEquals(null, repository.document(documentId)?.documentType)
+        jobs.result(secondJob, JobStatus.DONE, null, DocumentType.HANDOVER)
+        val finished = repository.job(secondJob)?.finishedAt
+        jobs.result(secondJob, JobStatus.PROCESSING, null, null)
+        jobs.result(secondJob, JobStatus.FAILED, "늦은 실패", null)
+        jobs.result(secondJob, JobStatus.DONE, null, DocumentType.APPROVAL)
+        assertEquals(JobStatus.DONE, repository.job(secondJob)?.status)
+        assertEquals(finished, repository.job(secondJob)?.finishedAt)
+        assertEquals(DocumentType.HANDOVER, repository.document(documentId)?.documentType)
+    }
+
+    @Test
+    fun newVersionClearsOldClassification() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.UPLOAD, "유형-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId = UUID.randomUUID()
+        val firstId = UUID.randomUUID()
+        val secondId = UUID.randomUUID()
+        repository.insertDocument(
+            DocumentRecord(documentId, source.id, "type.md", "type", "type.md", "md", null, null, null, Clearance.PUBLIC, null, 0, null),
+        )
+        repository.addVersion(VersionRecord(firstId, documentId, 1, "test/$firstId", 1, "d".repeat(64), admin.userId, Instant.now()))
+        repository.updateVersion(documentId, 1)
+        jobs.result(jobs.create(firstId), JobStatus.DONE, null, DocumentType.REPORT)
+        assertEquals(DocumentType.REPORT, repository.document(documentId)?.documentType)
+        repository.addVersion(VersionRecord(secondId, documentId, 2, "test/$secondId", 1, "e".repeat(64), admin.userId, Instant.now()))
+        repository.updateVersion(documentId, 2)
+        assertEquals(null, repository.document(documentId)?.documentType)
+    }
+
+    @Test
+    fun rollbackDeletesUploadedObjectAndQueuedCleanupRetries() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.UPLOAD, "롤백-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        var key = ""
+        TransactionTemplate(transactions).execute { transaction ->
+            val uploaded = service.uploadOne(admin, source.id, "rollback.md", file("되돌릴 내용"), null, null, null)
+            key = repository.currentVersion(uploaded.documentId!!)!!.storageKey
+            transaction.setRollbackOnly()
+        }
+        assertThrows(ApiException::class.java) { storage.download(key).use { it.readAllBytes() } }
+
+        val queuedKey = "test/${UUID.randomUUID()}"
+        storage.upload(queuedKey, "정리할 내용".byteInputStream(), "정리할 내용".toByteArray().size.toLong(), "text/plain")
+        cleanupQueue.enqueue(queuedKey)
+        cleanupWorker.retry()
+        assertThrows(ApiException::class.java) { storage.download(queuedKey).use { it.readAllBytes() } }
+    }
+
+    @Test
+    fun missingJobIsRecovered() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.UPLOAD, "복구-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId = UUID.randomUUID()
+        val versionId = UUID.randomUUID()
+        repository.insertDocument(
+            DocumentRecord(
+                documentId,
+                source.id,
+                "recovery.md",
+                "recovery",
+                "recovery.md",
+                "md",
+                null,
+                null,
+                null,
+                Clearance.PUBLIC,
+                null,
+                0,
+                null,
+            ),
+        )
+        repository.addVersion(VersionRecord(versionId, documentId, 1, "test/$versionId", 1, "c".repeat(64), admin.userId, Instant.now()))
+        repository.updateVersion(documentId, 1)
+        assertEquals(null, repository.jobForVersion(versionId))
+        ingestion.recover()
+        assertTrue(repository.jobForVersion(versionId) != null)
     }
 }

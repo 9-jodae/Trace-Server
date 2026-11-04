@@ -129,7 +129,11 @@ class DocumentRepository(
         documentId: UUID,
         number: Int,
     ) {
-        jdbc.update("UPDATE documents SET current_version = ?, updated_at = now(), deleted_at = NULL WHERE id = ?", number, documentId)
+        jdbc.update(
+            "UPDATE documents SET current_version = ?, document_type = NULL, updated_at = now(), deleted_at = NULL WHERE id = ?",
+            number,
+            documentId,
+        )
     }
 
     fun updateAccess(
@@ -145,12 +149,17 @@ class DocumentRepository(
         )
     }
 
-    fun updateType(
+    fun updateTypeIfCurrent(
         documentId: UUID,
-        type: DocumentType?,
-    ) {
-        jdbc.update("UPDATE documents SET document_type = ?, updated_at = now() WHERE id = ?", type?.name, documentId)
-    }
+        versionNumber: Int,
+        type: DocumentType,
+    ): Boolean =
+        jdbc.update(
+            "UPDATE documents SET document_type = ?, updated_at = now() WHERE id = ? AND current_version = ? AND deleted_at IS NULL",
+            type.name,
+            documentId,
+            versionNumber,
+        ) > 0
 
     fun softDelete(id: UUID) {
         jdbc.update("UPDATE documents SET deleted_at = now(), updated_at = now() WHERE id = ?", id)
@@ -201,8 +210,45 @@ class DocumentRepository(
     fun createJob(
         id: UUID,
         versionId: UUID,
-    ) {
-        jdbc.update("INSERT INTO ingestion_jobs(id, version_id, status) VALUES (?, ?, 'PENDING')", id, versionId)
+    ): UUID {
+        jdbc.update(
+            "INSERT INTO ingestion_jobs(id, version_id, status) VALUES (?, ?, 'PENDING') ON CONFLICT (version_id) DO NOTHING",
+            id,
+            versionId,
+        )
+        return requireNotNull(jobForVersion(versionId)).id
+    }
+
+    fun versionsNeedingIngestion(): List<VersionRecord> =
+        jdbc.query(
+            """SELECT v.* FROM document_versions v
+               JOIN documents d ON d.id = v.document_id
+               LEFT JOIN ingestion_jobs j ON j.version_id = v.id
+               WHERE d.deleted_at IS NULL AND (j.id IS NULL OR j.status = 'PENDING')
+               ORDER BY v.created_at LIMIT 100""",
+            ::mapVersion,
+        )
+
+    fun enqueueCleanup(key: String) {
+        jdbc.update(
+            "INSERT INTO storage_cleanup_jobs(id, storage_key) VALUES (?, ?) ON CONFLICT (storage_key) DO NOTHING",
+            UUID.randomUUID(),
+            key,
+        )
+    }
+
+    fun pendingCleanup(): List<Pair<UUID, String>> =
+        jdbc.query(
+            "SELECT id, storage_key FROM storage_cleanup_jobs ORDER BY created_at LIMIT 100",
+            { rs, _ -> rs.getObject("id", UUID::class.java) to rs.getString("storage_key") },
+        )
+
+    fun finishCleanup(id: UUID) {
+        jdbc.update("DELETE FROM storage_cleanup_jobs WHERE id = ?", id)
+    }
+
+    fun failedCleanup(id: UUID) {
+        jdbc.update("UPDATE storage_cleanup_jobs SET attempts = attempts + 1, last_attempt_at = now() WHERE id = ?", id)
     }
 
     fun job(id: UUID): JobRecord? = jdbc.query("SELECT * FROM ingestion_jobs WHERE id = ?", ::mapJob, id).firstOrNull()
@@ -210,22 +256,23 @@ class DocumentRepository(
     fun jobForVersion(versionId: UUID): JobRecord? =
         jdbc.query("SELECT * FROM ingestion_jobs WHERE version_id = ?", ::mapJob, versionId).firstOrNull()
 
-    fun updateJob(
+    fun transitionJob(
         id: UUID,
         status: JobStatus,
         error: String?,
-    ) {
+    ): Boolean =
         jdbc.update(
             """UPDATE ingestion_jobs SET status = ?, error_message = ?,
                started_at = CASE WHEN ? = 'PROCESSING' THEN now() ELSE started_at END,
-               finished_at = CASE WHEN ? IN ('DONE', 'FAILED') THEN now() ELSE finished_at END WHERE id = ?""",
+               finished_at = CASE WHEN ? IN ('DONE', 'FAILED') THEN now() ELSE finished_at END
+               WHERE id = ? AND (status = 'PENDING' OR (status = 'PROCESSING' AND ? IN ('DONE', 'FAILED')))""",
             status.name,
             error,
             status.name,
             status.name,
             id,
-        )
-    }
+            status.name,
+        ) > 0
 
     fun list(
         filter: DocumentFilter,
