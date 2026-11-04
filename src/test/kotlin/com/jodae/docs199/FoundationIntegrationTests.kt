@@ -36,7 +36,7 @@ class FoundationIntegrationTests : IntegrationTestBase() {
         val headers = HttpHeaders().apply { setBearerAuth(value) }
         val me = rest.exchange("/api/dev/me", HttpMethod.GET, HttpEntity<Void>(headers), String::class.java)
         assertEquals(HttpStatus.OK, me.statusCode)
-        assertTrue(me.body!!.contains("ENGINEER"))
+        assertTrue(me.body!!.contains("SYSTEM_ADMIN"))
         val missing = rest.exchange("/missing-route", HttpMethod.GET, HttpEntity<Void>(headers), String::class.java)
         assertEquals(HttpStatus.NOT_FOUND, missing.statusCode)
         assertTrue(missing.body!!.contains("NOT_FOUND"))

@@ -16,3 +16,5 @@ Windows PowerShell에서는 `.\gradlew.bat bootRun`을 사용합니다. `http://
 ## 개발
 
 도메인은 [도메인 추가 안내](docs/adding-a-domain.md)에 따라 추가합니다. [개발 규약](docs/conventions.md), [구조](docs/architecture.md), [AI 서버 계약](docs/ai-server-contract.md)도 확인하세요. PR 전에는 `./gradlew ktlintCheck test build`를 실행합니다.
+
+사용자·조직·문서 접근 규칙은 [접근 권한 안내](docs/access-control.md)를 참고하세요.
