@@ -39,10 +39,49 @@ AI 서버는 `POST /api/internal/ingestion-jobs/{id}/result`에 같은 공유 �
 
 **AI 팀 확인 필요:** 권한 범위(`AccessScope(departmentId, position, clearance, isAdmin)`)는 아직 AI 서버에 전달하지 않습니다. 지금은 Spring이 응답을 받은 뒤 출처만 걸러내므로, 검색 자체는 권한과 무관하게 전체 청크에서 이루어집니다. AI 서버가 검색 단계에서 권한 필터를 받는 기능을 구현하면 요청에 `AccessScope`를 추가합니다.
 
+## 청크·권한 보장 조회 함수 (확정, #15·#19)
+
+벡터 저장소는 PostgreSQL + pgvector로 확정했습니다(#14, Qdrant 미사용).
+
+`chunks` 테이블은 AI 서버가 직접 쓰고 읽습니다(`ai_app`에 `SELECT`/`INSERT`/`UPDATE`/`DELETE`, DDL 불가).
+
+- `id UUID`(**AI 서버가 생성**: 문서 버전 + 순번 기반 UUID를 그대로 저장, DB가 생성하지 않음), `document_version_id`(→ `document_versions.id`), `chunk_index`(버전 안에서 유일), `content`, `char_start`, `char_end`, `page`(선택), `location`(JSONB, 이후 `bbox` 등), `embedding vector(1024)`(선택), `content_hash`, `created_at`
+- 임베딩은 Bedrock Titan v2, 코사인 거리(`vector_cosine_ops`, HNSW 인덱스)
+
+권한 보장 조회 함수 3개(모두 `STABLE`, `ai_app`에 `EXECUTE`). 인자는 Spring의 `AccessScope(departmentId, position, clearance, isAdmin)` 네 값(`department_id uuid, position text, clearance text, is_admin boolean`)과 동일합니다.
+
+1. **권한 범위 안에서 벡터 검색**: `accessible_chunks`로 먼저 범위를 좁힌 뒤 벡터 거리로 정렬합니다.
+
+   ```sql
+   SELECT c.*, c.embedding <=> :query_embedding AS distance
+   FROM accessible_chunks(:department_id, :position, :clearance, :is_admin) c
+   ORDER BY distance
+   LIMIT 10;
+   ```
+
+2. **그래프 탐색 후보 청크 ID 묶음 확인**: 그래프 홉마다 모은 청크 ID가 지금도 보이는지 확인합니다.
+
+   ```sql
+   SELECT * FROM filter_accessible_chunk_ids(
+       :department_id, :position, :clearance, :is_admin, :candidate_chunk_ids
+   );
+   ```
+
+3. **맥락 재사용 전 근거 재검증**: JEV가 0.7 이상이어서 이전 `evidence_chunk_ids`를 재사용하기 전에 같은 함수로 다시 걸러냅니다.
+
+   ```sql
+   SELECT * FROM filter_accessible_chunk_ids(
+       :department_id, :position, :clearance, :is_admin, :previous_evidence_chunk_ids
+   );
+   ```
+
+문서 단위로만 필요하면 `accessible_document_versions(:department_id, :position, :clearance, :is_admin)`로 현재 버전의 `document_version_id` 목록만 받을 수 있습니다. 세 함수 모두 삭제된 문서·이전 버전을 자동으로 제외합니다.
+
+**AI 팀 확인 필요:** 질문 API가 이 네 값(`AccessScope`)을 요청에 실어 보내는 기능은 AI 서버가 받을 준비가 되면 추가합니다(지금은 문서화만, 코드는 아직 전달하지 않음).
+
 ## 남은 질문
 
 - JEV(TypeSafe `jev-latest`)로 질문·대화·청크 본문이 외부로 전송되는 점과 "외부로 데이터를 보내지 않는다"는 기획 전제의 충돌을 예외로 인정할지
 - 답변 생성 LLM의 Bedrock 모델 확정(Claude Haiku 4.5/Sonnet 등 팀 서버에서 키 없이 사용 가능)
 - PDF 페이지·`bbox` 제공 계획(파서 확정 이후)
 - `/ingest` 요청·콜백 초안(위 "처리 요청 초안") 수용 여부
-- 벡터 저장소(pgvector 제안 vs Qdrant 검토 중) 최종 확정 — 확정 전까지 `chunks` 테이블(#15)과 권한 보장 조회 함수(#19)는 보류합니다.
