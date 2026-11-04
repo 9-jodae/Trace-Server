@@ -58,18 +58,8 @@ class EvidenceService(
         chunkId: UUID,
     ): EvidenceResponse {
         val scope = policy.scope(principal)
-        val accessible =
-            jdbc.query(
-                "SELECT * FROM filter_accessible_chunk_ids(?, ?, ?, ?, ?)",
-                { rs, _ -> rs.getObject(1, UUID::class.java) },
-                scope.departmentId,
-                scope.position.name,
-                scope.clearance.name,
-                scope.isAdmin,
-                arrayOf(chunkId),
-            )
-        if (accessible.isEmpty()) throw ApiException(ErrorCode.NOT_FOUND)
-
+        // Permission check and row fetch are a single statement (joined against accessible_document_versions)
+        // so there is no window between "is this visible" and "read the content/URL" where access could change.
         val row =
             jdbc
                 .query(
@@ -79,6 +69,7 @@ class EvidenceService(
                     FROM chunks c
                     JOIN document_versions dv ON dv.id = c.document_version_id
                     JOIN documents d ON d.id = dv.document_id
+                    JOIN accessible_document_versions(?, ?, ?, ?) av ON av.document_version_id = c.document_version_id
                     WHERE c.id = ?
                     """,
                     { rs, _ ->
@@ -97,6 +88,10 @@ class EvidenceService(
                             rs.getString("extension"),
                         )
                     },
+                    scope.departmentId,
+                    scope.position.name,
+                    scope.clearance.name,
+                    scope.isAdmin,
                     chunkId,
                 ).firstOrNull() ?: throw ApiException(ErrorCode.NOT_FOUND)
 
