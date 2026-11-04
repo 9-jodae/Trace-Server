@@ -1,8 +1,11 @@
-@AGENTS.md
+﻿@AGENTS.md
 
-## Claude Code checklist
+## 작업 시작 체크리스트
 
-- Read the repository rules and relevant `docs/` page before editing.
-- Check `git status` before and after work; preserve existing user changes.
-- For a new domain, follow `docs/adding-a-domain.md` and add migration plus tests.
-- Report commands actually run and any unverified behavior.
+- 현재 디렉터리, 브랜치, `git status`, 원격 변경을 확인한다.
+- `AGENTS.md`와 관련 `docs/`를 읽는다.
+
+## 작업 종료 체크리스트
+
+- 관련 문서를 갱신하고 `./gradlew ktlintCheck test build`를 실행한다.
+- 실제 검증 결과와 남은 가정·결정 필요 항목을 보고한다.

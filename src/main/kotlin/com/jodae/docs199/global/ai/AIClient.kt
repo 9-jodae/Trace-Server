@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
+import org.springframework.web.client.ResourceAccessException
 import org.springframework.web.client.RestClient
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.time.Duration
@@ -78,8 +79,10 @@ class HttpAIClient(
                         }
                     }
                 return
-            } catch (ex: Exception) {
+            } catch (ex: ResourceAccessException) {
                 if (emitted || attempt++ >= retryCount) throw ApiException(ErrorCode.AI_UNAVAILABLE)
+            } catch (ex: Exception) {
+                throw ApiException(ErrorCode.AI_UNAVAILABLE)
             }
         }
     }

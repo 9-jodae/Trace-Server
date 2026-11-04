@@ -1,12 +1,12 @@
-# AI server contract template
+﻿# AI 서버 계약 템플릿
 
-**결정 필요** before implementing domain DTOs or production routes:
+다음 항목은 **결정 필요**입니다. 계약을 합의하기 전에는 도메인 DTO나 운영 경로를 확정하지 않습니다.
 
-- Endpoint names, version, authentication between servers, correlation/request ID.
-- Question request fields, limits, language, conversation context.
-- Evidence response shape: document ID, immutable version, source offsets, citation text, confidence, errors.
-- Authorization filter transfer: allowed document IDs or signed scope, expiry, and behavior when scope is empty.
-- Streaming media type, event names, JSON schemas, heartbeat, completion and error events, cancellation.
-- Idempotency, timeouts, retry safety and rate limits.
+- 엔드포인트 이름·버전, 서버 간 인증, requestId 전달 방식
+- 질문 요청 필드·길이 제한·언어·대화 문맥
+- 근거 응답의 문서 ID·불변 버전·원문 위치·인용문·오류 형식
+- 권한 범위 전달 형식, 만료와 빈 범위의 처리 방식
+- 스트리밍 미디어 타입·이벤트 이름·JSON 스키마·heartbeat·완료·오류·취소
+- 멱등성·타임아웃·안전한 재시도 범위·호출 제한
 
-`AIClient` transports raw JSON and SSE until this contract is set. Configure `AI_MODE=mock` for local samples, `http` for the real server.
+현재 `AIClient`는 계약 확정 전까지 원시 JSON과 SSE를 전송합니다. 로컬 샘플은 `AI_MODE=mock`, 실제 서버는 `http`로 전환합니다.

@@ -1,9 +1,9 @@
+﻿---
+name: 기능 제안
+about: 범위가 정해진 기능 제안
 ---
-name: Feature
-about: Propose a scoped feature
----
-## Goal
+## 목표
 
-## API and access rules
+## API와 접근 규칙
 
-## Acceptance criteria
+## 완료 기준

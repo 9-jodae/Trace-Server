@@ -10,6 +10,7 @@ import io.minio.MakeBucketArgs
 import io.minio.MinioClient
 import io.minio.PutObjectArgs
 import io.minio.RemoveObjectArgs
+import jakarta.annotation.PostConstruct
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.io.InputStream
@@ -47,9 +48,12 @@ class MinioFileStorage(
             .credentials(accessKey, secretKey)
             .build()
 
-    private fun ready() {
-        if (!client.bucketExists(BucketExistsArgs.builder().bucket(bucket).build())) {
-            client.makeBucket(MakeBucketArgs.builder().bucket(bucket).build())
+    @PostConstruct
+    fun initialize() {
+        safe {
+            if (!client.bucketExists(BucketExistsArgs.builder().bucket(bucket).build())) {
+                client.makeBucket(MakeBucketArgs.builder().bucket(bucket).build())
+            }
         }
     }
 
@@ -59,7 +63,6 @@ class MinioFileStorage(
         size: Long,
         contentType: String,
     ) = safe {
-        ready()
         client.putObject(
             PutObjectArgs
                 .builder()
@@ -74,7 +77,6 @@ class MinioFileStorage(
 
     override fun download(key: String): InputStream =
         safe {
-            ready()
             client.getObject(
                 GetObjectArgs
                     .builder()
@@ -86,7 +88,6 @@ class MinioFileStorage(
 
     override fun delete(key: String) =
         safe {
-            ready()
             client.removeObject(
                 RemoveObjectArgs
                     .builder()
@@ -102,7 +103,6 @@ class MinioFileStorage(
         expires: Duration,
     ): String =
         safe {
-            ready()
             client.getPresignedObjectUrl(
                 GetPresignedObjectUrlArgs
                     .builder()
