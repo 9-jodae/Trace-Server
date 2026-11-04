@@ -1,6 +1,6 @@
-package com.docs199.server.global.security
+package com.jodae.docs199.global.security
 
-import com.docs199.server.global.response.ApiResponse
+import com.jodae.docs199.global.response.ApiResponse
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import com.nimbusds.jose.proc.SecurityContext
 import jakarta.servlet.http.HttpServletResponse

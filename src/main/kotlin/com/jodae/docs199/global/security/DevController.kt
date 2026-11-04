@@ -1,8 +1,8 @@
-package com.docs199.server.global.security
+package com.jodae.docs199.global.security
 
-import com.docs199.server.global.error.ApiException
-import com.docs199.server.global.error.ErrorCode
-import com.docs199.server.global.response.ApiResponse
+import com.jodae.docs199.global.error.ApiException
+import com.jodae.docs199.global.error.ErrorCode
+import com.jodae.docs199.global.response.ApiResponse
 import io.swagger.v3.oas.annotations.security.SecurityRequirements
 import org.springframework.context.annotation.Profile
 import org.springframework.security.core.annotation.AuthenticationPrincipal

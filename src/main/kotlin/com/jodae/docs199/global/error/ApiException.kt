@@ -1,4 +1,4 @@
-package com.docs199.server.global.error
+package com.jodae.docs199.global.error
 
 import org.springframework.http.HttpStatus
 

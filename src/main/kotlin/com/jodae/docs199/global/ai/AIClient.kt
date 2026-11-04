@@ -1,7 +1,7 @@
-package com.docs199.server.global.ai
+package com.jodae.docs199.global.ai
 
-import com.docs199.server.global.error.ApiException
-import com.docs199.server.global.error.ErrorCode
+import com.jodae.docs199.global.error.ApiException
+import com.jodae.docs199.global.error.ErrorCode
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.MediaType

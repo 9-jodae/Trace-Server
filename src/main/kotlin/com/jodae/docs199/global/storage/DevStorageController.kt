@@ -1,6 +1,6 @@
-package com.docs199.server.global.storage
+package com.jodae.docs199.global.storage
 
-import com.docs199.server.global.response.ApiResponse
+import com.jodae.docs199.global.response.ApiResponse
 import org.springframework.context.annotation.Profile
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping

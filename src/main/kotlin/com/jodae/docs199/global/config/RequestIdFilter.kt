@@ -1,4 +1,4 @@
-package com.docs199.server.global.config
+package com.jodae.docs199.global.config
 
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest

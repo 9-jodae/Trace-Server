@@ -1,4 +1,4 @@
-package com.docs199.server.global.ai
+package com.jodae.docs199.global.ai
 
 import org.springframework.context.annotation.Profile
 import org.springframework.http.MediaType

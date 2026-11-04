@@ -1,1 +1,1 @@
-rootProject.name = "docs199-server"
+rootProject.name = "docs199"

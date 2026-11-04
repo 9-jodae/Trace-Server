@@ -1,6 +1,6 @@
-package com.docs199.server.global.error
+package com.jodae.docs199.global.error
 
-import com.docs199.server.global.response.ApiResponse
+import com.jodae.docs199.global.response.ApiResponse
 import jakarta.validation.ConstraintViolationException
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException

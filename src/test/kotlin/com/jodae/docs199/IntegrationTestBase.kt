@@ -1,4 +1,4 @@
-package com.docs199.server
+package com.jodae.docs199
 
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate
 import org.springframework.boot.test.context.SpringBootTest

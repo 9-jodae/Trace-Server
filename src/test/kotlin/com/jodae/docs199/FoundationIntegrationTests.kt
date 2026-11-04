@@ -1,7 +1,7 @@
-package com.docs199.server
+package com.jodae.docs199
 
-import com.docs199.server.global.ai.AIClient
-import com.docs199.server.global.storage.FileStorage
+import com.jodae.docs199.global.ai.AIClient
+import com.jodae.docs199.global.storage.FileStorage
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

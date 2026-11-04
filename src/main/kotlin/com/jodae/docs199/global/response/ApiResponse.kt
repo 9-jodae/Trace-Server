@@ -1,4 +1,4 @@
-package com.docs199.server.global.response
+package com.jodae.docs199.global.response
 
 data class ApiResponse<T>(
     val success: Boolean,

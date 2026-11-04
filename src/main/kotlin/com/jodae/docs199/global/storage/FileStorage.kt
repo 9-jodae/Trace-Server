@@ -1,7 +1,7 @@
-package com.docs199.server.global.storage
+package com.jodae.docs199.global.storage
 
-import com.docs199.server.global.error.ApiException
-import com.docs199.server.global.error.ErrorCode
+import com.jodae.docs199.global.error.ApiException
+import com.jodae.docs199.global.error.ErrorCode
 import io.minio.BucketExistsArgs
 import io.minio.GetObjectArgs
 import io.minio.GetPresignedObjectUrlArgs

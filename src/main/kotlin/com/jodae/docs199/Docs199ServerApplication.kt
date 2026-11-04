@@ -1,4 +1,4 @@
-package com.docs199.server
+package com.jodae.docs199
 
 import io.swagger.v3.oas.annotations.OpenAPIDefinition
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType
