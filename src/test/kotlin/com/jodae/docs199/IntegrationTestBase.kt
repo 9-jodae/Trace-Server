@@ -6,23 +6,18 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.GenericContainer
-import org.testcontainers.junit.jupiter.Container
-import org.testcontainers.junit.jupiter.Testcontainers
 import org.testcontainers.postgresql.PostgreSQLContainer
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
 @ActiveProfiles("test", "local")
-@Testcontainers
 abstract class IntegrationTestBase {
     companion object {
         private val bucket = "test-${java.util.UUID.randomUUID()}"
 
-        @Container
         @JvmStatic
         val postgres = PostgreSQLContainer("pgvector/pgvector:0.8.7-pg18")
 
-        @Container
         @JvmStatic
         val minio =
             GenericContainer<Nothing>("docs199/minio-local:RELEASE.2025-09-07T16-13-09Z").apply {
@@ -31,6 +26,11 @@ abstract class IntegrationTestBase {
                 withEnv("MINIO_ROOT_PASSWORD", "localminio123")
                 withCommand("server", "/data")
             }
+
+        init {
+            postgres.start()
+            minio.start()
+        }
 
         @DynamicPropertySource
         @JvmStatic

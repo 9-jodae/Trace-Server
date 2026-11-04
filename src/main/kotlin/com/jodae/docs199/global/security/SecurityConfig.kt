@@ -1,5 +1,8 @@
 package com.jodae.docs199.global.security
 
+import com.jodae.docs199.domain.user.Clearance
+import com.jodae.docs199.domain.user.Position
+import com.jodae.docs199.domain.user.Role
 import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.response.ApiResponse
 import com.nimbusds.jose.jwk.source.ImmutableSecret
@@ -13,6 +16,8 @@ import org.springframework.security.config.Customizer
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.authority.SimpleGrantedAuthority
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtEncoder
@@ -28,16 +33,48 @@ import javax.crypto.spec.SecretKeySpec
 
 data class UserPrincipal(
     val userId: java.util.UUID,
-    val role: String,
-    val department: String,
-    val position: String,
+    val role: Role,
+    val departmentId: java.util.UUID,
+    val position: Position,
+    val clearance: Clearance,
 )
 
 interface AccessPolicy {
     fun canAccess(
         principal: UserPrincipal,
-        resource: Any,
+        resource: DocumentAccessRule,
     ): Boolean
+
+    fun scope(principal: UserPrincipal): AccessScope
+}
+
+data class DocumentAccessRule(
+    val clearance: Clearance,
+    val departmentIds: Set<java.util.UUID>,
+    val minimumPosition: Position?,
+)
+
+data class AccessScope(
+    val departmentId: java.util.UUID,
+    val position: Position,
+    val clearance: Clearance,
+    val isAdmin: Boolean,
+)
+
+class DefaultAccessPolicy : AccessPolicy {
+    override fun canAccess(
+        principal: UserPrincipal,
+        resource: DocumentAccessRule,
+    ): Boolean =
+        principal.role == Role.SYSTEM_ADMIN ||
+            (
+                principal.clearance >= resource.clearance &&
+                    (resource.departmentIds.isEmpty() || principal.departmentId in resource.departmentIds) &&
+                    (resource.minimumPosition == null || principal.position >= resource.minimumPosition)
+            )
+
+    override fun scope(principal: UserPrincipal) =
+        AccessScope(principal.departmentId, principal.position, principal.clearance, principal.role == Role.SYSTEM_ADMIN)
 }
 
 @Configuration
@@ -47,13 +84,10 @@ class SecurityConfig(
     private val mapper: ObjectMapper,
 ) {
     @Bean
-    fun accessPolicy(): AccessPolicy =
-        object : AccessPolicy {
-            override fun canAccess(
-                principal: UserPrincipal,
-                resource: Any,
-            ) = true
-        }
+    fun accessPolicy(): AccessPolicy = DefaultAccessPolicy()
+
+    @Bean
+    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
 
     @Bean
     fun jwtEncoder(): JwtEncoder = NimbusJwtEncoder(ImmutableSecret<SecurityContext>(key()))
@@ -87,10 +121,13 @@ class SecurityConfig(
                     .requestMatchers(
                         "/actuator/health",
                         "/api/dev/token",
+                        "/api/auth/login",
                         "/swagger-ui/**",
                         "/swagger-ui.html",
                         "/v3/api-docs/**",
                     ).permitAll()
+                    .requestMatchers("/api/admin/**")
+                    .hasAnyRole("DOC_ADMIN", "SYSTEM_ADMIN")
                     .anyRequest()
                     .authenticated()
             }.oauth2ResourceServer { it.jwt { jwt -> jwt.jwtAuthenticationConverter(converter) } }
