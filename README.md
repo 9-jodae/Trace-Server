@@ -23,4 +23,6 @@ Windows PowerShell에서는 `.\gradlew.bat bootRun`을 사용합니다. `http://
 
 팀 서버 첫 배포와 운영 명령은 [배포 안내](docs/deployment.md)를 참고하세요.
 
+시연용 가상 회사 문서, 권한 매니페스트, 질문 평가 세트와 업로드 절차는 [데모 자료 안내](demo/README.md)를 참고하세요.
+
 AI 팀원이 운영 PostgreSQL·Neo4j에 접속하는 방법은 [AI 연동 접속 안내](docs/ai-integration-setup.md)를 참고하세요.

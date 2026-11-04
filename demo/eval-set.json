@@ -1,0 +1,554 @@
+{
+  "schemaVersion": 1,
+  "accountProfiles": {
+    "hr.staff@local.docs199": {
+      "department": "인사팀",
+      "position": "STAFF",
+      "clearance": "PUBLIC",
+      "role": "EMPLOYEE",
+      "seeded": true
+    },
+    "dev.manager@local.docs199": {
+      "department": "개발팀",
+      "position": "MANAGER",
+      "clearance": "INTERNAL",
+      "role": "EMPLOYEE",
+      "seeded": true
+    },
+    "ops.director@local.docs199": {
+      "department": "경영지원팀",
+      "position": "DIRECTOR",
+      "clearance": "CONFIDENTIAL",
+      "role": "EMPLOYEE",
+      "seeded": true
+    },
+    "doc.admin@local.docs199": {
+      "department": "경영지원팀",
+      "position": "MANAGER",
+      "clearance": "CONFIDENTIAL",
+      "role": "DOC_ADMIN",
+      "seeded": true
+    },
+    "system.admin@local.docs199": {
+      "department": "경영지원팀",
+      "position": "DIRECTOR",
+      "clearance": "CONFIDENTIAL",
+      "role": "SYSTEM_ADMIN",
+      "seeded": true
+    },
+    "sales.manager@local.docs199": {
+      "department": "영업팀",
+      "position": "MANAGER",
+      "clearance": "CONFIDENTIAL",
+      "role": "EMPLOYEE",
+      "seeded": true
+    },
+    "hr.manager@local.docs199": {
+      "department": "인사팀",
+      "position": "MANAGER",
+      "clearance": "CONFIDENTIAL",
+      "role": "EMPLOYEE",
+      "seeded": true
+    }
+  },
+  "cases": [
+    {
+      "id": "Q01",
+      "question": "내가 볼 수 있는 자료에서 연차는 며칠까지 이월하나요?",
+      "expectedAnswer": "공개 취업규칙 기준 최대 5일이며 다음 해 3월 31일까지 사용합니다.",
+      "evidence": [
+        {
+          "documentId": "leave-policy",
+          "section": "제12조 연차휴가",
+          "excerpt": "최대 5일 이월"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [],
+      "scenario": "권한별 연차"
+    },
+    {
+      "id": "Q02",
+      "question": "내가 볼 수 있는 자료에서 연차는 며칠까지 이월하나요?",
+      "expectedAnswer": "공개 취업규칙은 5일, 인사팀 내부 지침은 7일로 충돌합니다. 어느 값이 유효한지 확인이 필요합니다.",
+      "evidence": [
+        {
+          "documentId": "leave-policy",
+          "section": "제12조 연차휴가",
+          "excerpt": "최대 5일 이월"
+        },
+        {
+          "documentId": "leave-operation",
+          "section": "제2조 이월 처리",
+          "excerpt": "최대 7일 이월"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "system.admin@local.docs199",
+        "hr.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "scenario": "권한별 연차"
+    },
+    {
+      "id": "Q03",
+      "question": "내가 볼 수 있는 자료에서 고객 추가 할인 한도는?",
+      "expectedAnswer": "일반 고객 추가 할인은 최대 5%입니다.",
+      "evidence": [
+        {
+          "documentId": "sales-guide",
+          "section": "제1조 기본 할인",
+          "excerpt": "최대 5%"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "ops.director@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [],
+      "scenario": "권한별 할인"
+    },
+    {
+      "id": "Q04",
+      "question": "내가 볼 수 있는 자료에서 고객 추가 할인 한도는?",
+      "expectedAnswer": "일반 고객은 5%, 전략 고객은 승인 조건에 따라 최대 12%입니다.",
+      "evidence": [
+        {
+          "documentId": "sales-guide",
+          "section": "제1조 기본 할인",
+          "excerpt": "최대 5%"
+        },
+        {
+          "documentId": "discount-exception",
+          "section": "제2조 승인 한도",
+          "excerpt": "최대 12%"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "system.admin@local.docs199",
+        "sales.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "ops.director@local.docs199"
+      ],
+      "scenario": "권한별 할인"
+    },
+    {
+      "id": "Q05",
+      "question": "현재 국내 출장 숙박비 한도는 얼마인가요?",
+      "expectedAnswer": "개정 v2 기준 1박당 90,000원입니다. v1의 70,000원은 신규 출장에 적용하지 않습니다.",
+      "evidence": [
+        {
+          "documentId": "travel-v2",
+          "section": "제4조 숙박비",
+          "excerpt": "1박당 90,000원"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "hr.staff@local.docs199",
+        "system.admin@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [],
+      "scenario": "개정 우선"
+    },
+    {
+      "id": "Q06",
+      "question": "출장비 규정 개정 전 숙박비 한도는?",
+      "expectedAnswer": "v1은 1박당 70,000원이었습니다.",
+      "evidence": [
+        {
+          "documentId": "travel-v1",
+          "section": "제4조 숙박비",
+          "excerpt": "1박당 최대 70,000원"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "system.admin@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [],
+      "scenario": "이력 조회"
+    },
+    {
+      "id": "Q07",
+      "question": "출장 영수증 제출 기한은?",
+      "expectedAnswer": "출장 종료 후 5영업일 이내입니다.",
+      "evidence": [
+        {
+          "documentId": "travel-v2",
+          "section": "제7조 증빙",
+          "excerpt": "5영업일 이내"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [],
+      "scenario": "기본"
+    },
+    {
+      "id": "Q08",
+      "question": "100만 원 이상 경비는 누가 최종 승인하나요?",
+      "expectedAnswer": "경영지원팀 부장이 최종 승인합니다.",
+      "evidence": [
+        {
+          "documentId": "expense-approval",
+          "section": "제3조 결재 단계",
+          "excerpt": "경영지원팀 부장이 최종 승인"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "ops.director@local.docs199",
+        "doc.admin@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "scenario": "권한 제한"
+    },
+    {
+      "id": "Q09",
+      "question": "사고 의심 링크를 열면 언제 신고하나요?",
+      "expectedAnswer": "30분 안에 담당자에게 신고합니다.",
+      "evidence": [
+        {
+          "documentId": "security-handbook",
+          "section": "제3조 사고 신고",
+          "excerpt": "30분 안에 담당자에게 신고"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "hr.staff@local.docs199",
+        "dev.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [],
+      "scenario": "기본"
+    },
+    {
+      "id": "Q10",
+      "question": "보안 사고 초기 대응에서 계정은 어떻게 하나요?",
+      "expectedAnswer": "신고 후 30분 이내에 영향 계정을 차단하고 로그를 보존합니다.",
+      "evidence": [
+        {
+          "documentId": "incident-runbook",
+          "section": "제2조 초기 대응",
+          "excerpt": "영향 계정을 차단하고 로그를 보존"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "dev.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199",
+        "ops.director@local.docs199"
+      ],
+      "scenario": "권한 제한"
+    },
+    {
+      "id": "Q11",
+      "question": "배포 전 확인해야 할 항목은?",
+      "expectedAnswer": "DB 마이그레이션과 헬스체크 결과를 확인합니다.",
+      "evidence": [
+        {
+          "documentId": "dev-handover",
+          "section": "제3조 배포 전 확인",
+          "excerpt": "데이터베이스 마이그레이션과 헬스체크"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "dev.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "scenario": "인수인계"
+    },
+    {
+      "id": "Q12",
+      "question": "2분기 배포 중 롤백은 몇 건인가요?",
+      "expectedAnswer": "12건 중 1건입니다.",
+      "evidence": [
+        {
+          "documentId": "release-report",
+          "section": "제2조 결과",
+          "excerpt": "롤백은 1건"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "dev.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "scenario": "보고서"
+    },
+    {
+      "id": "Q13",
+      "question": "2분기 평균 복구 시간은?",
+      "expectedAnswer": "18분입니다.",
+      "evidence": [
+        {
+          "documentId": "release-report",
+          "section": "제2조 결과",
+          "excerpt": "18분"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "dev.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "scenario": "보고서"
+    },
+    {
+      "id": "Q14",
+      "question": "일반 고객 할인 상한을 넘는 요청은 어디로 보내나요?",
+      "expectedAnswer": "영업팀 팀장에게 전달합니다.",
+      "evidence": [
+        {
+          "documentId": "sales-guide",
+          "section": "제3조 고객 응대",
+          "excerpt": "영업팀 팀장에게 전달"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [],
+      "scenario": "기본"
+    },
+    {
+      "id": "Q15",
+      "question": "전략 고객 10% 할인은 누가 승인하나요?",
+      "expectedAnswer": "8% 초과~12% 구간이므로 영업본부장 결재가 필요합니다.",
+      "evidence": [
+        {
+          "documentId": "discount-exception",
+          "section": "제2조 승인 한도",
+          "excerpt": "영업본부장 결재"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "sales.manager@local.docs199",
+        "system.admin@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "ops.director@local.docs199",
+        "hr.staff@local.docs199"
+      ],
+      "scenario": "기밀"
+    },
+    {
+      "id": "Q16",
+      "question": "영업 담당자 변경 시 무엇을 인계하나요?",
+      "expectedAnswer": "계약 상태, 고객 요청, 미수금, 다음 회의 일정을 인계합니다.",
+      "evidence": [
+        {
+          "documentId": "sales-handover",
+          "section": "제1조 인수 범위",
+          "excerpt": "계약 상태, 고객 요청, 미수금"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "sales.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "scenario": "인수인계"
+    },
+    {
+      "id": "Q17",
+      "question": "상반기 신규 계약은 몇 건인가요?",
+      "expectedAnswer": "24건입니다.",
+      "evidence": [
+        {
+          "documentId": "contract-report",
+          "section": "제1조 집계",
+          "excerpt": "24건"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "sales.manager@local.docs199",
+        "system.admin@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "scenario": "보고서"
+    },
+    {
+      "id": "Q18",
+      "question": "사무실 이전 목표일은 언제인가요?",
+      "expectedAnswer": "2026년 10월 17일입니다.",
+      "evidence": [
+        {
+          "documentId": "operations-plan",
+          "section": "제1조 일정",
+          "excerpt": "2026년 10월 17일"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "ops.director@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "dev.manager@local.docs199"
+      ],
+      "scenario": "권한 제한"
+    },
+    {
+      "id": "Q19",
+      "question": "사무실 이전 예상 비용은?",
+      "expectedAnswer": "4,800만 원입니다.",
+      "evidence": [
+        {
+          "documentId": "operations-plan",
+          "section": "제2조 예산",
+          "excerpt": "4,800만 원"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "doc.admin@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "scenario": "권한 제한"
+    },
+    {
+      "id": "Q20",
+      "question": "징계위원회 의결 요건은?",
+      "expectedAnswer": "재적 과반수 찬성입니다.",
+      "evidence": [
+        {
+          "documentId": "discipline-policy",
+          "section": "제2조 심의",
+          "excerpt": "재적 과반수 찬성"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "hr.manager@local.docs199",
+        "system.admin@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199",
+        "doc.admin@local.docs199"
+      ],
+      "scenario": "기밀"
+    },
+    {
+      "id": "Q21",
+      "question": "징계 심의 기록은 몇 년 보관하나요?",
+      "expectedAnswer": "3년간 보관합니다.",
+      "evidence": [
+        {
+          "documentId": "discipline-policy",
+          "section": "제3조 기록 보관",
+          "excerpt": "3년간 보관"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "hr.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "ops.director@local.docs199"
+      ],
+      "scenario": "기밀"
+    },
+    {
+      "id": "Q22",
+      "question": "하반기 개발 직군 채용 목표는?",
+      "expectedAnswer": "3명입니다.",
+      "evidence": [
+        {
+          "documentId": "hiring-presentation",
+          "section": "제1조 목표",
+          "excerpt": "개발 직군 3명"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "ops.director@local.docs199",
+        "hr.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "dev.manager@local.docs199"
+      ],
+      "scenario": "발표"
+    },
+    {
+      "id": "Q23",
+      "question": "신규 직원 자료에서 연차 기준은 어느 문서를 보나요?",
+      "expectedAnswer": "취업규칙 제12조를 기준으로 안내합니다.",
+      "evidence": [
+        {
+          "documentId": "onboarding-note",
+          "section": "제2조 연차",
+          "excerpt": "《취업규칙》 제12조"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [],
+      "scenario": "Obsidian 링크"
+    },
+    {
+      "id": "Q24",
+      "question": "문서 지식 지도에서 장애 연락 자료는 무엇인가요?",
+      "expectedAnswer": "장애 연락 흐름 문서로 연결합니다.",
+      "evidence": [
+        {
+          "documentId": "knowledge-map",
+          "section": "제1조 연결",
+          "excerpt": "[[장애 연락 흐름]]"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [],
+      "scenario": "Obsidian 링크"
+    },
+    {
+      "id": "Q25",
+      "question": "장애 발견 시 첫 연락 대상은?",
+      "expectedAnswer": "개발팀 당직자입니다.",
+      "evidence": [
+        {
+          "documentId": "escalation-note",
+          "section": "제1조 알림",
+          "excerpt": "개발팀 당직자"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "dev.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "scenario": "Obsidian 링크"
+    },
+    {
+      "id": "Q26",
+      "question": "보안 사고 대응 절차와 인수인계의 관계는?",
+      "expectedAnswer": "인수인계 문서의 장애 복구 조항은 보안 사고 대응 절차 제2조를 참조합니다.",
+      "evidence": [
+        {
+          "documentId": "dev-handover",
+          "section": "제5조 장애 복구",
+          "excerpt": "《보안 사고 대응 절차》 제2조"
+        }
+      ],
+      "shouldAnswerAccounts": [
+        "dev.manager@local.docs199"
+      ],
+      "shouldNotAnswerAccounts": [
+        "hr.staff@local.docs199"
+      ],
+      "scenario": "문서 관계"
+    }
+  ]
+}
