@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg18
+    environment:
+      POSTGRES_DB: docs199
+      POSTGRES_USER: docs199
+      POSTGRES_PASSWORD: local-only
+    ports: ["5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docs199 -d docs199"]
+      interval: 5s
+      retries: 10
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: localminio
+      MINIO_ROOT_PASSWORD: localminio123
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["minio-data:/data"]
+  # AI server: add a service here once its contract and deployment are agreed.
+volumes:
+  postgres-data:
+  minio-data:

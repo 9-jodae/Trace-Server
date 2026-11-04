@@ -1,0 +1,55 @@
+spring:
+  application.name: docs199-server
+  profiles.default: local
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/docs199}
+    username: ${DB_USER:docs199}
+    password: ${DB_PASSWORD:local-only}
+  jpa:
+    hibernate.ddl-auto: validate
+    open-in-view: false
+  servlet.multipart.max-file-size: ${MAX_UPLOAD_SIZE:20MB}
+  servlet.multipart.max-request-size: ${MAX_UPLOAD_SIZE:20MB}
+management.endpoints.web.exposure.include: health,info
+logging.pattern.level: "%5p [requestId=%X{requestId:-}]"
+springdoc.api-docs.enabled: false
+springdoc.swagger-ui.enabled: false
+app:
+  jwt-secret: ${JWT_SECRET:local-development-secret-change-before-production-123456}
+  cors-origins: ${CORS_ORIGINS:http://localhost:3000}
+  storage:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:localminio}
+    secret-key: ${MINIO_SECRET_KEY:localminio123}
+    bucket: ${MINIO_BUCKET:documents}
+  ai:
+    mode: ${AI_MODE:mock}
+    base-url: ${AI_BASE_URL:http://localhost:8000}
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
+    retry-count: ${AI_RETRY_COUNT:0}
+---
+spring.config.activate.on-profile: local
+springdoc.api-docs.enabled: true
+springdoc.swagger-ui.enabled: true
+---
+spring.config.activate.on-profile: prod
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa.hibernate.ddl-auto: validate
+app:
+  jwt-secret: ${JWT_SECRET}
+  cors-origins: ${CORS_ORIGINS}
+  storage:
+    endpoint: ${MINIO_ENDPOINT}
+    access-key: ${MINIO_ACCESS_KEY}
+    secret-key: ${MINIO_SECRET_KEY}
+    bucket: ${MINIO_BUCKET}
+  ai:
+    mode: ${AI_MODE:http}
+    base-url: ${AI_BASE_URL}
+---
+spring.config.activate.on-profile: test
+app.ai.mode: mock
