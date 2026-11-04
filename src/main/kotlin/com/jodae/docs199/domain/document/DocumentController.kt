@@ -31,7 +31,7 @@ import java.util.UUID
 
 data class SourceRequest(
     val kind: SourceKind = SourceKind.UPLOAD,
-    @field:NotBlank val name: String,
+    @field:NotBlank(message = "소스 이름을 입력하세요") val name: String,
     val defaultDepartmentId: UUID?,
     val defaultClearance: Clearance = Clearance.PUBLIC,
 )

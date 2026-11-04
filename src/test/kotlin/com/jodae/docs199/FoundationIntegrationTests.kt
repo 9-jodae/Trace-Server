@@ -56,7 +56,7 @@ class FoundationIntegrationTests : IntegrationTestBase() {
     fun mockAiStream() {
         val chunks = mutableListOf<String>()
         ai.stream("/sample", "{}", chunks::add)
-        assertTrue(chunks.joinToString("").contains("mock response"))
+        assertTrue(chunks.joinToString("").contains("모의 응답"))
         assertTrue(chunks.joinToString("").contains("event: done"))
     }
 }

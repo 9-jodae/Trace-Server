@@ -27,7 +27,7 @@ class MockAIClient : AIClient {
         jsonBody: String,
         emit: (String) -> Unit,
     ) {
-        emit("event: message\ndata: {\"text\":\"mock response\"}\n\n")
+        emit("event: message\ndata: {\"text\":\"모의 응답\"}\n\n")
         emit("event: done\ndata: {}\n\n")
     }
 }
