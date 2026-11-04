@@ -63,7 +63,7 @@ class DocumentService(
         departmentId: UUID?,
         clearance: Clearance,
     ): SourceRecord {
-        if (kind != SourceKind.UPLOAD) throw ApiException(ErrorCode.INVALID_INPUT, "현재는 업로드 소스만 생성할 수 있습니다")
+        if (kind == SourceKind.NOTION) throw ApiException(ErrorCode.INVALID_INPUT, "NOTION 소스는 아직 생성할 수 없습니다")
         validateDepartments(departmentId?.let(::setOf) ?: emptySet())
         val source = SourceRecord(UUID.randomUUID(), kind, name, departmentId, clearance, principal.userId)
         repository.createSource(source)
@@ -93,7 +93,7 @@ class DocumentService(
         val extension = normalized.substringAfterLast('.', "").lowercase()
         if (extension !in allowed) return UploadResult(path, null, null, "EXCLUDED", "허용되지 않는 확장자")
         val source = repository.source(sourceId) ?: throw ApiException(ErrorCode.NOT_FOUND)
-        if (source.kind != SourceKind.UPLOAD) throw ApiException(ErrorCode.INVALID_INPUT)
+        if (source.kind == SourceKind.NOTION) throw ApiException(ErrorCode.INVALID_INPUT)
         repository.lockSource(sourceId)
         val bytes = file.bytes
         val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }

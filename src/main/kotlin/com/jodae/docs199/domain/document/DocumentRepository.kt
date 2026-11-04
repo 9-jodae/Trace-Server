@@ -12,7 +12,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
-enum class SourceKind { UPLOAD, NOTION }
+enum class SourceKind { LOCAL, OBSIDIAN, NOTION }
 
 enum class DocumentType { HANDOVER, APPROVAL, REPORT, PRESENTATION, ETC }
 
@@ -65,6 +65,7 @@ data class JobRecord(
 
 data class DocumentFilter(
     val sourceId: UUID?,
+    val sourceKind: SourceKind?,
     val extension: String?,
     val documentType: DocumentType?,
     val authoredFrom: LocalDate?,
@@ -285,6 +286,10 @@ class DocumentRepository(
         filter.sourceId?.let {
             where.append(" AND d.source_id = :sourceId")
             p.addValue("sourceId", it)
+        }
+        filter.sourceKind?.let {
+            where.append(" AND EXISTS (SELECT 1 FROM sources s WHERE s.id = d.source_id AND s.kind = :sourceKind)")
+            p.addValue("sourceKind", it.name)
         }
         filter.extension?.let {
             where.append(" AND d.extension = :extension")

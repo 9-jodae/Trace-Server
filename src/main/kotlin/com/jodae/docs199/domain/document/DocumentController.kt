@@ -30,7 +30,7 @@ import java.time.LocalDate
 import java.util.UUID
 
 data class SourceRequest(
-    val kind: SourceKind = SourceKind.UPLOAD,
+    val kind: SourceKind = SourceKind.LOCAL,
     @field:NotBlank(message = "소스 이름을 입력하세요") val name: String,
     val defaultDepartmentId: UUID?,
     val defaultClearance: Clearance = Clearance.PUBLIC,
@@ -104,6 +104,7 @@ class AdminDocumentController(
     fun list(
         @CurrentUser principal: UserPrincipal,
         @RequestParam(required = false) sourceId: UUID?,
+        @RequestParam(required = false) sourceKind: SourceKind?,
         @RequestParam(required = false) extension: String?,
         @RequestParam(required = false) documentType: DocumentType?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) authoredFrom: LocalDate?,
@@ -113,7 +114,13 @@ class AdminDocumentController(
         @RequestParam(defaultValue = "20") size: Int,
     ): ApiResponse<PageResponse<DocumentRecord>> =
         ApiResponse.ok(
-            service.list(principal, DocumentFilter(sourceId, extension, documentType, authoredFrom, authoredTo, status), page, size, true),
+            service.list(
+                principal,
+                DocumentFilter(sourceId, sourceKind, extension, documentType, authoredFrom, authoredTo, status),
+                page,
+                size,
+                true,
+            ),
         )
 
     @GetMapping("/documents/{id}")
@@ -172,6 +179,7 @@ class EmployeeDocumentController(
     fun list(
         @CurrentUser principal: UserPrincipal,
         @RequestParam(required = false) sourceId: UUID?,
+        @RequestParam(required = false) sourceKind: SourceKind?,
         @RequestParam(required = false) extension: String?,
         @RequestParam(required = false) documentType: DocumentType?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) authoredFrom: LocalDate?,
@@ -180,7 +188,13 @@ class EmployeeDocumentController(
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
     ) = ApiResponse.ok(
-        service.list(principal, DocumentFilter(sourceId, extension, documentType, authoredFrom, authoredTo, status), page, size, false),
+        service.list(
+            principal,
+            DocumentFilter(sourceId, sourceKind, extension, documentType, authoredFrom, authoredTo, status),
+            page,
+            size,
+            false,
+        ),
     )
 
     @GetMapping("/{id}")

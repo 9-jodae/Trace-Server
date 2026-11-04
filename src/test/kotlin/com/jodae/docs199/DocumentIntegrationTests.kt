@@ -70,7 +70,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     @Test
     fun uploadVersionJobAndExclusions() {
         val admin = principal("doc.admin@local.docs199")
-        val source = service.createSource(admin, SourceKind.UPLOAD, "테스트-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val source = service.createSource(admin, SourceKind.LOCAL, "테스트-${UUID.randomUUID()}", null, Clearance.PUBLIC)
         val first = service.uploadOne(admin, source.id, "notes/memo.md", file("첫 내용"), null, null, null)
         assertEquals("CREATED", first.outcome)
         val id = first.documentId!!
@@ -98,7 +98,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
         val hr = principal("hr.staff@local.docs199")
         val dev = principal("dev.manager@local.docs199")
         val director = principal("ops.director@local.docs199")
-        val source = service.createSource(admin, SourceKind.UPLOAD, "권한-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val source = service.createSource(admin, SourceKind.LOCAL, "권한-${UUID.randomUUID()}", null, Clearance.PUBLIC)
         val id =
             service
                 .uploadOne(
@@ -110,7 +110,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
                     setOf(dev.departmentId),
                     Position.MANAGER,
                 ).documentId!!
-        val filter = DocumentFilter(source.id, null, null, null, null, null)
+        val filter = DocumentFilter(source.id, null, null, null, null, null, null)
         assertFalse(service.list(hr, filter, 0, 20, false).items.any { it.id == id })
         assertFalse(service.list(dev, filter, 0, 20, false).items.any { it.id == id })
         assertFalse(service.list(director, filter, 0, 20, false).items.any { it.id == id })
@@ -138,7 +138,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     @Test
     fun multipartApiAndAdminRole() {
         val admin = principal("doc.admin@local.docs199")
-        val source = service.createSource(admin, SourceKind.UPLOAD, "API-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val source = service.createSource(admin, SourceKind.LOCAL, "API-${UUID.randomUUID()}", null, Clearance.PUBLIC)
         val tokenBody = rest.postForEntity("/api/dev/token", null, String::class.java).body!!
         val token = Regex("\"accessToken\":\"([^\"]+)\"").find(tokenBody)!!.groupValues[1]
         val form = LinkedMultiValueMap<String, Any>()
@@ -188,7 +188,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     @Test
     fun staleAndDuplicateCallbacksDoNotChangeLatestVersion() {
         val admin = principal("doc.admin@local.docs199")
-        val source = service.createSource(admin, SourceKind.UPLOAD, "콜백-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val source = service.createSource(admin, SourceKind.LOCAL, "콜백-${UUID.randomUUID()}", null, Clearance.PUBLIC)
         val documentId = UUID.randomUUID()
         repository.insertDocument(
             DocumentRecord(
@@ -229,7 +229,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     @Test
     fun newVersionClearsOldClassification() {
         val admin = principal("doc.admin@local.docs199")
-        val source = service.createSource(admin, SourceKind.UPLOAD, "유형-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val source = service.createSource(admin, SourceKind.LOCAL, "유형-${UUID.randomUUID()}", null, Clearance.PUBLIC)
         val documentId = UUID.randomUUID()
         val firstId = UUID.randomUUID()
         val secondId = UUID.randomUUID()
@@ -248,7 +248,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     @Test
     fun rollbackDeletesUploadedObjectAndQueuedCleanupRetries() {
         val admin = principal("doc.admin@local.docs199")
-        val source = service.createSource(admin, SourceKind.UPLOAD, "롤백-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val source = service.createSource(admin, SourceKind.LOCAL, "롤백-${UUID.randomUUID()}", null, Clearance.PUBLIC)
         var key = ""
         TransactionTemplate(transactions).execute { transaction ->
             val uploaded = service.uploadOne(admin, source.id, "rollback.md", file("되돌릴 내용"), null, null, null)
@@ -267,7 +267,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     @Test
     fun missingJobIsRecovered() {
         val admin = principal("doc.admin@local.docs199")
-        val source = service.createSource(admin, SourceKind.UPLOAD, "복구-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val source = service.createSource(admin, SourceKind.LOCAL, "복구-${UUID.randomUUID()}", null, Clearance.PUBLIC)
         val documentId = UUID.randomUUID()
         val versionId = UUID.randomUUID()
         repository.insertDocument(
