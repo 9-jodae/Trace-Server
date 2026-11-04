@@ -122,6 +122,7 @@ class SecurityConfig(
                         "/actuator/health",
                         "/api/dev/token",
                         "/api/auth/login",
+                        "/api/internal/ingestion-jobs/*/result",
                         "/swagger-ui/**",
                         "/swagger-ui.html",
                         "/v3/api-docs/**",
