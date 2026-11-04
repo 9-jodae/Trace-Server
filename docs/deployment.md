@@ -39,6 +39,8 @@ Neo4j Community 컨테이너는 힙 1G, 페이지 캐시 512M로 제한합니다
 | `ops.director@local.docs199` | 경영지원팀 | DIRECTOR | EMPLOYEE |
 | `doc.admin@local.docs199` | 경영지원팀 | MANAGER | DOC_ADMIN |
 | `system.admin@local.docs199` | 경영지원팀 | DIRECTOR | SYSTEM_ADMIN |
+| `sales.manager@local.docs199` | 영업팀 | MANAGER | EMPLOYEE |
+| `hr.manager@local.docs199` | 인사팀 | MANAGER | EMPLOYEE |
 
 ## 남은 결정
 
