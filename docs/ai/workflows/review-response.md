@@ -1,0 +1,8 @@
+# Respond to PR reviews
+
+1. For each PR, query `gh api repos/9-jodae/docs199-Server/pulls/{n}/reviews`, `/pulls/{n}/comments`, and `/issues/{n}/comments`. If there is no review, poll every minute for up to ten minutes. Identify bots by account type `Bot` or a `[bot]` suffix. Stop on a human `CHANGES_REQUESTED` review.
+2. Classify each new bot finding. **Apply** bugs, security issues, rule violations, and missing tests on that PR branch. Run `./gradlew ktlintCheck test build`, commit with `fix(review): Korean description`, push, and reply with the change and commit SHA. **Disagree** only when the finding conflicts with `AGENTS.md`, the Korean `docs/`, or confirmed design, or is a false positive; reply with evidence and make no code change. **Defer** valid out-of-scope work to a new Issue and reply with its number.
+3. Handle one follow-up review after a fix, for at most two rounds total. Reply to a repeated finding once. Stop if an actionable finding remains after round two.
+4. Resolve bot threads after responding when appropriate. Never resolve a human thread.
+5. For stacked PRs, rebase each later branch onto the updated preceding branch and push with `--force-with-lease`. Stop if a conflict requires judgment. Before merging, check passing CI, no actionable findings, no human `CHANGES_REQUESTED`, `mergeable` without conflicts, and base `develop`. Merge in order with `gh pr merge {n} --merge`; never use `--admin`, squash, rebase merge, or delete the remote branch. Recheck later PRs after each merge.
+6. Report received findings, applied/disagreed/deferred counts, fix SHAs, Issue numbers, CI outcomes, and merge SHAs in Korean. For a review-only PR, do not merge it.
