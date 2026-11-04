@@ -26,6 +26,11 @@ class FoundationIntegrationTests : IntegrationTestBase() {
         val response = rest.getForEntity("/actuator/health", String::class.java)
         assertEquals(HttpStatus.OK, response.statusCode)
         assertTrue(response.body!!.contains("UP"))
+        val api = rest.getForEntity("/api/health", String::class.java)
+        assertEquals(HttpStatus.OK, api.statusCode)
+        listOf("status", "version", "commit", "buildTime", "profile").forEach { field ->
+            assertTrue(api.body!!.contains("\"$field\""))
+        }
     }
 
     @Test

@@ -10,6 +10,14 @@ plugins {
 group = "com.jodae"
 version = "0.0.1-SNAPSHOT"
 
+springBoot {
+    buildInfo {
+        properties {
+            additional.put("commit", System.getenv("GIT_COMMIT") ?: "unknown")
+        }
+    }
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
@@ -34,6 +42,7 @@ dependencies {
     implementation("org.springframework.security:spring-security-oauth2-jose")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
     implementation("io.minio:minio:9.0.3")
+    implementation("software.amazon.awssdk:s3:2.57.8")
     runtimeOnly("org.postgresql:postgresql")
     testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")
     testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")
@@ -43,6 +52,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.boot:spring-boot-restclient")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation("org.mockito:mockito-core")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter:2.0.5")
     testImplementation("org.testcontainers:testcontainers-postgresql:2.0.5")
