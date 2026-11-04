@@ -49,6 +49,9 @@ services:
     image: neo4j:2026.10.1-community
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD is required}
+      # Any NEO4J_-prefixed env var is treated by the image's entrypoint as a neo4j.conf setting
+      # override, so the healthcheck password is passed under a differently-prefixed name.
+      HEALTHCHECK_NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD is required}
       # Community edition default memory settings target large standalone hosts. This server is
       # shared with the Spring app, PostgreSQL, and (soon) the AI server, so the graph store is
       # capped well below the host's available memory. See docs/deployment.md for the budget.
@@ -60,7 +63,7 @@ services:
     volumes:
       - neo4j-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u neo4j -p \"$$NEO4J_PASSWORD\" 'RETURN 1' || exit 1"]
+      test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u neo4j -p \"$$HEALTHCHECK_NEO4J_PASSWORD\" 'RETURN 1' || exit 1"]
       interval: 10s
       retries: 10
       start_period: 30s

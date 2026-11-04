@@ -12,8 +12,9 @@ if [ -z "$ai_db_password" ]; then
     exit 1
 fi
 
-docker compose -f compose.prod.yaml exec -T postgres psql -U docs199 -d docs199 -v ON_ERROR_STOP=1 >/dev/null <<SQL
-ALTER ROLE ai_app LOGIN PASSWORD '$ai_db_password';
+docker compose -f compose.prod.yaml exec -T postgres \
+    psql -U docs199 -d docs199 -v ON_ERROR_STOP=1 -v pw="$ai_db_password" >/dev/null <<'SQL'
+ALTER ROLE ai_app LOGIN PASSWORD :'pw';
 SQL
 
 echo "ai_app 로그인을 활성화했습니다. 값은 출력하지 않습니다."
