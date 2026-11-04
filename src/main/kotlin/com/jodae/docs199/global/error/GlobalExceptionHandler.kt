@@ -50,7 +50,7 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception::class)
     fun unknown(ex: Exception): ResponseEntity<ApiResponse<Nothing>> {
-        logger.error("요청 처리 실패 requestId={}", MDC.get("requestId"), ex)
+        logger.error("요청 처리 실패 requestId={} exceptionType={}", MDC.get("requestId"), ex.javaClass.simpleName)
         return ResponseEntity.internalServerError().body(ApiResponse.fail(ErrorCode.INTERNAL_ERROR.name, ErrorCode.INTERNAL_ERROR.message))
     }
 }
