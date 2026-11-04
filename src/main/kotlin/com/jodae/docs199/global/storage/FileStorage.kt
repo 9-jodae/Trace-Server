@@ -12,6 +12,7 @@ import io.minio.PutObjectArgs
 import io.minio.RemoveObjectArgs
 import jakarta.annotation.PostConstruct
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.io.InputStream
 import java.time.Duration
@@ -35,6 +36,7 @@ interface FileStorage {
 }
 
 @Component
+@ConditionalOnProperty(name = ["app.storage.type"], havingValue = "minio", matchIfMissing = true)
 class MinioFileStorage(
     @Value("\${app.storage.endpoint}") endpoint: String,
     @Value("\${app.storage.access-key}") accessKey: String,

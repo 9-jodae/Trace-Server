@@ -1,0 +1,48 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/docs199
+      DB_USER: docs199
+      STORAGE_TYPE: s3
+      AWS_REGION: ${AWS_REGION:-ap-southeast-1}
+      AI_MODE: mock
+    ports:
+      - "127.0.0.1:18080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  health-gateway:
+    image: nginx:1.30.6-alpine
+    volumes:
+      - ./infra/nginx/health.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "0.0.0.0:8080:8080"
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg18
+    environment:
+      POSTGRES_DB: docs199
+      POSTGRES_USER: docs199
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docs199 -d docs199"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+  # AI server: add after its deployment contract is agreed.
+volumes:
+  postgres-data:

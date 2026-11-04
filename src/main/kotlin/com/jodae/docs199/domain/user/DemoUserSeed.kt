@@ -1,14 +1,19 @@
 package com.jodae.docs199.domain.user
 
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.ApplicationRunner
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Profile
 import org.springframework.security.crypto.password.PasswordEncoder
 
 @Configuration
-@Profile("local")
-class LocalUserSeed {
+@Profile("local | prod")
+@ConditionalOnProperty(name = ["app.demo-seed"], havingValue = "true")
+class DemoUserSeed(
+    @Value("\${app.demo-password}") private val password: String,
+) {
     @Bean
     fun seedUsers(
         departments: DepartmentRepository,
@@ -30,7 +35,7 @@ class LocalUserSeed {
                 users.save(
                     User(
                         email = account.email,
-                        passwordHash = requireNotNull(encoder.encode("local-demo-1234")),
+                        passwordHash = requireNotNull(encoder.encode(password)),
                         name = account.name,
                         department = byName.getValue(account.department),
                         position = account.position,

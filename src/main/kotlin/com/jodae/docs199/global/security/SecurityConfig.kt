@@ -120,6 +120,7 @@ class SecurityConfig(
                 it
                     .requestMatchers(
                         "/actuator/health",
+                        "/api/health",
                         "/api/dev/token",
                         "/api/auth/login",
                         "/api/internal/ingestion-jobs/*/result",
