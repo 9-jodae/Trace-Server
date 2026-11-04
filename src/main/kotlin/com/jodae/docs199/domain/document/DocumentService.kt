@@ -20,6 +20,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile
 import java.security.MessageDigest
 import java.time.Duration
+import java.time.Instant
+import java.time.LocalDate
 import java.util.UUID
 
 data class UploadResult(
@@ -63,7 +65,7 @@ class DocumentService(
         departmentId: UUID?,
         clearance: Clearance,
     ): SourceRecord {
-        if (kind != SourceKind.UPLOAD) throw ApiException(ErrorCode.INVALID_INPUT, "현재는 업로드 소스만 생성할 수 있습니다")
+        if (kind == SourceKind.NOTION) throw ApiException(ErrorCode.INVALID_INPUT, "NOTION 소스는 아직 생성할 수 없습니다")
         validateDepartments(departmentId?.let(::setOf) ?: emptySet())
         val source = SourceRecord(UUID.randomUUID(), kind, name, departmentId, clearance, principal.userId)
         repository.createSource(source)
@@ -81,6 +83,10 @@ class DocumentService(
         clearance: Clearance?,
         departments: Set<UUID>?,
         minimumPosition: Position?,
+        ownerDepartmentId: UUID? = null,
+        author: String? = null,
+        authoredAt: LocalDate? = null,
+        sourceModifiedAt: Instant? = null,
     ): UploadResult {
         val normalized = path.replace('\\', '/').trim('/')
         val parts = normalized.split('/')
@@ -93,7 +99,7 @@ class DocumentService(
         val extension = normalized.substringAfterLast('.', "").lowercase()
         if (extension !in allowed) return UploadResult(path, null, null, "EXCLUDED", "허용되지 않는 확장자")
         val source = repository.source(sourceId) ?: throw ApiException(ErrorCode.NOT_FOUND)
-        if (source.kind != SourceKind.UPLOAD) throw ApiException(ErrorCode.INVALID_INPUT)
+        if (source.kind == SourceKind.NOTION) throw ApiException(ErrorCode.INVALID_INPUT)
         repository.lockSource(sourceId)
         val bytes = file.bytes
         val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
@@ -107,6 +113,8 @@ class DocumentService(
         val effectiveDepartments = departments ?: source.defaultDepartmentId?.let(::setOf) ?: emptySet()
         validateDepartments(effectiveDepartments)
         if (previous == null) {
+            val effectiveOwner = ownerDepartmentId ?: source.defaultDepartmentId
+            effectiveOwner?.let { validateDepartments(setOf(it)) }
             repository.insertDocument(
                 DocumentRecord(
                     documentId,
@@ -116,18 +124,29 @@ class DocumentService(
                     normalized,
                     extension,
                     null,
-                    null,
-                    null,
+                    author,
+                    authoredAt,
                     clearance ?: source.defaultClearance,
                     minimumPosition,
                     0,
                     null,
+                    effectiveOwner,
+                    sourceModifiedAt,
                 ),
             )
             repository.setDepartments(documentId, effectiveDepartments)
-        } else if (clearance != null || departments != null || minimumPosition != null) {
-            repository.updateAccess(documentId, clearance ?: previous.clearance, minimumPosition ?: previous.minimumPosition)
-            if (departments != null) repository.setDepartments(documentId, departments)
+        } else {
+            if (clearance != null || departments != null || minimumPosition != null) {
+                repository.updateAccess(documentId, clearance ?: previous.clearance, minimumPosition ?: previous.minimumPosition)
+                if (departments != null) repository.setDepartments(documentId, departments)
+            }
+            if (ownerDepartmentId != null) {
+                validateDepartments(setOf(ownerDepartmentId))
+                repository.updateOwnerDepartment(documentId, ownerDepartmentId)
+            }
+            if (author != null || authoredAt != null || sourceModifiedAt != null) {
+                repository.updateMetadata(documentId, author, authoredAt, sourceModifiedAt)
+            }
         }
         val versionId = UUID.randomUUID()
         val key = "documents/$documentId/$versionId"
@@ -150,7 +169,7 @@ class DocumentService(
             },
         )
         repository.addVersion(
-            VersionRecord(versionId, documentId, number, key, bytes.size.toLong(), hash, principal.userId, java.time.Instant.now()),
+            VersionRecord(versionId, documentId, number, key, bytes.size.toLong(), hash, principal.userId, Instant.now()),
         )
         repository.updateVersion(documentId, number)
         events.publishEvent(VersionCreated(versionId))
@@ -189,13 +208,22 @@ class DocumentService(
         clearance: Clearance,
         departments: Set<UUID>,
         position: Position?,
+        ownerDepartmentId: UUID? = null,
     ): DocumentDetail {
         val doc = repository.document(id) ?: throw ApiException(ErrorCode.NOT_FOUND)
         validateDepartments(departments)
         repository.updateAccess(id, clearance, position)
         repository.setDepartments(id, departments)
+        if (ownerDepartmentId != null) {
+            validateDepartments(setOf(ownerDepartmentId))
+            repository.updateOwnerDepartment(id, ownerDepartmentId)
+        }
         return DocumentDetail(
-            doc.copy(clearance = clearance, minimumPosition = position),
+            doc.copy(
+                clearance = clearance,
+                minimumPosition = position,
+                ownerDepartmentId = ownerDepartmentId ?: doc.ownerDepartmentId,
+            ),
             departments,
             repository.versions(id),
             repository.currentVersion(id)?.let { repository.jobForVersion(it.id) },
