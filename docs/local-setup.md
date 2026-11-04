@@ -13,3 +13,5 @@ JDK 25, Docker Desktop과 Docker Compose가 필요합니다. Gradle은 고정된
 `docker compose down`은 서비스를 중지하고 볼륨을 보존합니다. 초기화가 필요하면 데이터를 확인한 뒤 볼륨을 별도로 정리합니다.
 
 로컬 데모 계정의 공통 비밀번호는 `local-demo-1234`입니다. 이메일은 `hr.staff@local.docs199`, `dev.manager@local.docs199`, `ops.director@local.docs199`, `doc.admin@local.docs199`, `system.admin@local.docs199`입니다. `POST /api/auth/login`에 이메일과 비밀번호를 보내 토큰을 발급합니다. 운영 환경에는 시드가 들어가지 않습니다.
+
+문서 업로드는 [문서 관리 안내](document-management.md)를 참고하세요. `ALLOWED_EXTENSIONS`로 허용 형식을 지정하고 `INTERNAL_SECRET`을 AI 서버와 공유합니다. `AI_MODE=mock`이면 별도 AI 서버 없이 처리 상태를 확인할 수 있습니다.
