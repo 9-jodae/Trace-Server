@@ -1,5 +1,7 @@
-# pgvector use after a domain is agreed
+﻿# pgvector 사용 안내
 
-Flyway enables `vector` in V1. Choose dimensions and an indexing strategy only after the embedding model is known. A future migration can add a `vector(n)` column and a cosine or inner product index. Keep the vector table with its owning domain.
+Flyway V1이 `vector` 확장을 활성화합니다. 임베딩 모델과 차원·거리 계산·인덱스 전략을 AI 팀과 합의한 다음 도메인 마이그레이션에서 `vector(n)` 컬럼을 추가합니다.
 
-For JPA, either register a supported Hibernate vector type and map the property after checking its version against Spring Boot 4, or keep vector writes and similarity searches in a repository with parameterized native SQL. Never concatenate vector values into SQL. Example query shape: `SELECT id FROM embeddings ORDER BY embedding <=> CAST(:query AS vector) LIMIT :limit`. Decide dimensions, distance metric, and index type with the AI team first.
+JPA에서는 Spring Boot 4와 호환되는 Hibernate 벡터 타입을 확인해 매핑하거나, Repository에서 파라미터화된 네이티브 SQL로 벡터 쓰기와 유사도 조회를 처리합니다. 벡터 값을 SQL 문자열에 이어 붙이지 않습니다. 예시 형태: `SELECT id FROM embeddings ORDER BY embedding <=> CAST(:query AS vector) LIMIT :limit`.
+
+**결정 필요:** 차원, 거리 척도, 인덱스 종류와 생성 시점.

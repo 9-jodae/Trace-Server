@@ -1,18 +1,18 @@
-# docs199 Server
+﻿# docs199 서버
 
-Kotlin/Spring Boot foundation for a future internal document service. No document domain is implemented yet.
+사내 문서 검색 서비스를 위한 Kotlin/Spring Boot 백엔드입니다.
 
-## Run locally
+## 로컬 실행
 
-Install JDK 25 and Docker Desktop, then:
+JDK 25와 Docker Desktop을 설치한 뒤 실행합니다.
 
 ```bash
 docker compose up -d
 ./gradlew bootRun
 ```
 
-On Windows PowerShell use `.\gradlew.bat bootRun`. Open `http://localhost:8080/actuator/health` (UP) and `http://localhost:8080/swagger-ui.html`. Get a local token with `POST /api/dev/token`, authorize in Swagger, then call `/api/dev/me`, `/api/dev/storage/upload`, or `/api/dev/ai/stream`. Defaults are for local development; see [.env.example](.env.example) and [local setup](docs/local-setup.md).
+Windows PowerShell에서는 `.\gradlew.bat bootRun`을 사용합니다. `http://localhost:8080/actuator/health`가 `UP`인지 확인하고 `http://localhost:8080/swagger-ui.html`을 엽니다. `POST /api/dev/token`으로 로컬 토큰을 발급해 Swagger의 Authorize에 입력합니다. 자세한 내용은 [로컬 실행 안내](docs/local-setup.md)를 참고하세요.
 
-## Develop
+## 개발
 
-Read [adding a domain](docs/adding-a-domain.md), [conventions](docs/conventions.md), [architecture](docs/architecture.md), and the [AI contract template](docs/ai-server-contract.md). Run `./gradlew ktlintCheck test build` before a PR.
+도메인은 [도메인 추가 안내](docs/adding-a-domain.md)에 따라 추가합니다. [개발 규약](docs/conventions.md), [구조](docs/architecture.md), [AI 서버 계약](docs/ai-server-contract.md)도 확인하세요. PR 전에는 `./gradlew ktlintCheck test build`를 실행합니다.

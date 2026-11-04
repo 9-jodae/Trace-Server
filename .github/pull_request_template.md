@@ -1,9 +1,9 @@
-## Why
+﻿## 변경 이유
 
-## Changes
+## 변경 내용
 
-## Tests
+## 검증 결과
 
-## Related issue
+## 관련 Issue
 
-Commit format: `type(scope): 설명` (feat, fix, docs, test, chore, refactor).
+커밋 형식: `type(scope): 설명` (feat, fix, docs, test, chore, refactor).
