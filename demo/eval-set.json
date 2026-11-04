@@ -36,19 +36,19 @@
       "role": "SYSTEM_ADMIN",
       "seeded": true
     },
-    "sales.manager@example.invalid": {
+    "sales.manager@local.docs199": {
       "department": "영업팀",
       "position": "MANAGER",
       "clearance": "CONFIDENTIAL",
       "role": "EMPLOYEE",
-      "seeded": false
+      "seeded": true
     },
-    "hr.manager@example.invalid": {
+    "hr.manager@local.docs199": {
       "department": "인사팀",
       "position": "MANAGER",
       "clearance": "CONFIDENTIAL",
       "role": "EMPLOYEE",
-      "seeded": false
+      "seeded": true
     }
   },
   "cases": [
@@ -87,7 +87,7 @@
       ],
       "shouldAnswerAccounts": [
         "system.admin@local.docs199",
-        "hr.manager@example.invalid"
+        "hr.manager@local.docs199"
       ],
       "shouldNotAnswerAccounts": [
         "hr.staff@local.docs199"
@@ -129,7 +129,7 @@
       ],
       "shouldAnswerAccounts": [
         "system.admin@local.docs199",
-        "sales.manager@example.invalid"
+        "sales.manager@local.docs199"
       ],
       "shouldNotAnswerAccounts": [
         "ops.director@local.docs199"
@@ -332,7 +332,7 @@
         }
       ],
       "shouldAnswerAccounts": [
-        "sales.manager@example.invalid",
+        "sales.manager@local.docs199",
         "system.admin@local.docs199"
       ],
       "shouldNotAnswerAccounts": [
@@ -353,7 +353,7 @@
         }
       ],
       "shouldAnswerAccounts": [
-        "sales.manager@example.invalid"
+        "sales.manager@local.docs199"
       ],
       "shouldNotAnswerAccounts": [
         "hr.staff@local.docs199"
@@ -372,7 +372,7 @@
         }
       ],
       "shouldAnswerAccounts": [
-        "sales.manager@example.invalid",
+        "sales.manager@local.docs199",
         "system.admin@local.docs199"
       ],
       "shouldNotAnswerAccounts": [
@@ -430,7 +430,7 @@
         }
       ],
       "shouldAnswerAccounts": [
-        "hr.manager@example.invalid",
+        "hr.manager@local.docs199",
         "system.admin@local.docs199"
       ],
       "shouldNotAnswerAccounts": [
@@ -451,7 +451,7 @@
         }
       ],
       "shouldAnswerAccounts": [
-        "hr.manager@example.invalid"
+        "hr.manager@local.docs199"
       ],
       "shouldNotAnswerAccounts": [
         "ops.director@local.docs199"
@@ -471,7 +471,7 @@
       ],
       "shouldAnswerAccounts": [
         "ops.director@local.docs199",
-        "hr.manager@example.invalid"
+        "hr.manager@local.docs199"
       ],
       "shouldNotAnswerAccounts": [
         "dev.manager@local.docs199"

@@ -16,6 +16,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "demo/manifest.json"
 
+# 현재 업로드 API가 받지 않는 매니페스트 필드. 전송하지 않고 경고만 남긴다.
+UNSUPPORTED_FIELDS = ("title", "documentType")
+
 
 def request(base, method, path, token=None, body=None, content_type=None):
     headers = {"Accept": "application/json"}
@@ -52,7 +55,7 @@ def multipart(fields, file_field, filename, content):
     return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
 
 
-def department_map(values):
+def department_overrides(values):
     result = {}
     for value in values:
         if "=" not in value:
@@ -60,6 +63,13 @@ def department_map(values):
         name, identifier = value.split("=", 1)
         result[name] = str(uuid.UUID(identifier))
     return result
+
+
+def department_map(base, token, overrides):
+    departments = request(base, "GET", "/api/departments", token)
+    mapping = {department["name"]: department["id"] for department in departments}
+    mapping.update(overrides)
+    return mapping
 
 
 def list_documents(base, token, source_id):
@@ -79,7 +89,7 @@ def main():
     parser = argparse.ArgumentParser(description="모아온 데모 문서 업로드 (기본값: 계획만 출력)")
     parser.add_argument("--execute", action="store_true", help="실제 API에 업로드")
     parser.add_argument("--department-id", action="append", default=[], metavar="부서명=UUID",
-                        help="열람 부서 UUID 매핑 (반복 가능)")
+                        help="부서 UUID 수동 지정/보정 (반복 가능, 기본은 GET /api/departments로 자동 조회)")
     parser.add_argument("--check-exclusions", action="store_true", help=".obsidian 설정 파일의 EXCLUDED 응답 확인")
     args = parser.parse_args()
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -88,17 +98,16 @@ def main():
         file = ROOT / document["file"]
         if not file.is_file() or not file.resolve().is_relative_to((ROOT / "demo/documents").resolve()):
             raise RuntimeError(f"문서 파일이 없거나 허용 경로 밖입니다: {document['file']}")
-    mappings = department_map(args.department_id)
-    required = {name for document in docs for name in document["readDepartments"]}
-    missing = sorted(required - mappings.keys())
+    overrides = department_overrides(args.department_id)
+    required_departments = sorted(
+        {name for document in docs for name in document["readDepartments"]}
+        | {document["ownerDepartment"] for document in docs if document["ownerDepartment"]},
+    )
     if not args.execute:
-        print(f"계획: 파일 {len(docs)}개, 논리 문서 {len({d['logicalId'] for d in docs})}개, 소스 2개")
-        print("현재 API는 LOCAL/OBSIDIAN kind를 지원하지 않아 두 소스 모두 UPLOAD로 생성합니다.")
-        if missing:
-            print("실행 전 부서 UUID 필요: " + ", ".join(missing))
+        print(f"계획: 파일 {len(docs)}개, 논리 문서 {len({d['logicalId'] for d in docs})}개, 소스 종류 {{'LOCAL', 'OBSIDIAN'}}")
+        print("부서 UUID는 실행 시 GET /api/departments로 자동 조회합니다. 필요한 부서: " + ", ".join(required_departments))
+        print("참고: " + ", ".join(UNSUPPORTED_FIELDS) + "은 현재 업로드 API가 받지 않아 전송하지 않습니다(매니페스트 값과 다를 수 있음).")
         return
-    if missing:
-        raise RuntimeError("부서 UUID가 없습니다: " + ", ".join(missing))
     base = os.environ.get("DOCS199_BASE_URL", "http://localhost:8080").rstrip("/")
     parsed = urllib.parse.urlparse(base)
     if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}):
@@ -111,6 +120,13 @@ def main():
             raise RuntimeError("DOCS199_TOKEN 또는 DOCS199_EMAIL·DOCS199_PASSWORD가 필요합니다.")
         token = json_request(base, "POST", "/api/auth/login", None, {"email": email, "password": password})["accessToken"]
 
+    print("참고: " + ", ".join(UNSUPPORTED_FIELDS) + "은 현재 업로드 API가 받지 않아 전송하지 않습니다(매니페스트 값과 다를 수 있음).")
+
+    departments = department_map(base, token, overrides)
+    missing = sorted(set(required_departments) - departments.keys())
+    if missing:
+        raise RuntimeError("부서 UUID를 찾을 수 없습니다(--department-id로 보정 가능): " + ", ".join(missing))
+
     existing_sources = request(base, "GET", "/api/admin/sources", token)
     sources = {}
     for kind in ("LOCAL", "OBSIDIAN"):
@@ -119,7 +135,7 @@ def main():
         if len(matches) > 1:
             raise RuntimeError(f"동일한 이름의 소스가 여러 개입니다: {name}")
         source = matches[0] if matches else json_request(base, "POST", "/api/admin/sources", token,
-                                                          {"kind": "UPLOAD", "name": name,
+                                                          {"kind": kind, "name": name,
                                                            "defaultDepartmentId": None, "defaultClearance": "PUBLIC"})
         sources[kind] = source["id"]
     current = {kind: list_documents(base, token, source_id) for kind, source_id in sources.items()}
@@ -147,9 +163,16 @@ def main():
                     continue
                 raise RuntimeError(f"기존 문서가 예상한 v1과 다릅니다: {path}")
         fields = [("paths", path), ("clearance", document["clearance"])]
-        fields += [("departmentIds", mappings[name]) for name in document["readDepartments"]]
+        fields += [("departmentIds", departments[name]) for name in document["readDepartments"]]
         if document["minimumPosition"]:
             fields.append(("minimumPosition", document["minimumPosition"]))
+        if document["ownerDepartment"]:
+            fields.append(("ownerDepartmentId", departments[document["ownerDepartment"]]))
+        if document["author"]:
+            fields.append(("author", document["author"]))
+        if document["authoredAt"]:
+            fields.append(("authoredAt", document["authoredAt"]))
+            fields.append(("sourceModifiedAt", f"{document['authoredAt']}T00:00:00Z"))
         body, content_type = multipart(fields, "files", file.name, content)
         result = request(base, "POST", f"/api/admin/sources/{source_id}/documents", token, body, content_type)[0]
         if result["outcome"] not in {"CREATED", "UPDATED", "UNCHANGED"}:

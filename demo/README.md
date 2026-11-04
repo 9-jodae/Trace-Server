@@ -43,28 +43,19 @@ $env:DOCS199_PASSWORD = '<로컬 데모 비밀번호>'
 .\.venv\Scripts\python.exe demo/tools/upload_demo.py
 ```
 
-현재 API에는 부서 목록 조회가 없으므로 부서 UUID 4개를 로컬 DB에서 조회해 `--department-id`로 전달해야 합니다. 로컬 Compose의 DB라면 다음으로 조회합니다.
+부서 UUID는 `GET /api/departments`로 자동 조회하므로 수동 입력이 필요 없습니다. 이름이 바뀌었거나 로컬 DB와 다른 값을 써야 하면 `--department-id '부서명=UUID'`로 개별 보정할 수 있습니다(반복 가능, 선택 사항).
 
 ```powershell
-docker compose exec -T postgres psql -U docs199 -d docs199 -Atc 'SELECT name, id FROM departments ORDER BY name'
-```
-
-조회한 값을 아래처럼 각 부서에 대입합니다. 실제 UUID를 저장소에 커밋하지 않습니다.
-
-```powershell
-.\.venv\Scripts\python.exe demo/tools/upload_demo.py --execute --check-exclusions `
-  --department-id '경영지원팀=<UUID>' `
-  --department-id '인사팀=<UUID>' `
-  --department-id '개발팀=<UUID>' `
-  --department-id '영업팀=<UUID>'
+.\.venv\Scripts\python.exe demo/tools/upload_demo.py --execute --check-exclusions
 ```
 
 스크립트는 이름이 같은 소스를 재사용하고 현재 버전의 해시가 같으면 건너뜁니다. 개정 문서는 v1 다음 v2 순서로 올립니다. `.obsidian/app.json`은 `--check-exclusions`일 때 업로드 API에 보내고 `EXCLUDED` 응답을 확인합니다. 실행 결과에는 토큰·비밀번호·문서 본문·Presigned URL을 출력하지 않습니다. 인증 정보 보호를 위해 HTTPS 또는 localhost 주소만 허용합니다.
 
 ### 현재 API와 매니페스트의 차이
 
-- 매니페스트의 `sourceKind`는 시나리오상 출처인 `LOCAL`·`OBSIDIAN`입니다. 현재 백엔드는 `UPLOAD`만 생성할 수 있어 스크립트는 이름이 다른 `UPLOAD` 소스 두 개를 만듭니다. Obsidian 메타데이터와 링크는 파일 및 매니페스트에 유지합니다.
-- 현재 업로드 API는 소유 부서, 작성자·작성일, 의도한 문서 유형과 표시 제목을 입력받지 않습니다. 해당 값은 매니페스트에만 있으며, API 응답과 다를 수 있습니다. #9~#11에서 계약이 정해지면 연결해야 합니다.
+- 매니페스트의 `sourceKind`(`LOCAL`·`OBSIDIAN`)대로 소스를 실제로 생성합니다(#9 반영). 이전에는 둘 다 `UPLOAD`였습니다.
+- 소유 부서(`ownerDepartmentId`), 작성자(`author`), 작성일(`authoredAt`), 원본 수정 시각(`sourceModifiedAt`)은 현재 업로드·개정 API가 받으므로 매니페스트 값을 그대로 전송합니다(#10·#11 반영).
+- 의도한 문서 유형(`documentType`)과 표시 제목(`title`)은 여전히 업로드 API가 받지 않습니다. 문서 유형은 AI 처리 콜백으로만 채워지고, 제목은 파일명에서 그대로 파생되어 매니페스트 값과 다를 수 있습니다. 스크립트는 이 두 필드를 보내지 않고 실행 시 경고를 출력합니다.
 - `eval-set.json`의 `shouldNotAnswerAccounts`는 해당 사례의 **전체 기대 답변과 근거**를 볼 수 없는 계정입니다. 이 계정이 공개 문서에 근거한 일부 답변을 볼 수는 있습니다.
-- `eval-set.json`의 `@example.invalid` 계정은 **가상 권한 프로필**이며 시드 계정이 아닙니다. 실제 API 평가에는 같은 부서·직급·등급의 계정 준비가 필요합니다. `@local.docs199` 계정은 `docs/local-setup.md`의 시드 프로필을 사용합니다.
+- `eval-set.json`의 모든 계정은 이제 실제 시드 계정입니다. 기존 `sales.manager@example.invalid`/`hr.manager@example.invalid` 가상 프로필을 영업팀·인사팀 MANAGER/CONFIDENTIAL 시드 계정(`sales.manager@local.docs199`, `hr.manager@local.docs199`)으로 대체했습니다(`docs/local-setup.md` 참고). 더 이상 남은 가상 프로필은 없습니다.
 - 평가 세트의 답변은 기대 결과입니다. 질문·검색 API와 AI 처리는 이 자료의 범위 밖입니다.
