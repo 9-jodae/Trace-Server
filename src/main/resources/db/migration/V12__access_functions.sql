@@ -16,8 +16,8 @@ LANGUAGE sql STABLE AS $$
       AND (
         p_is_admin
         OR (
-          CASE d.clearance WHEN 'PUBLIC' THEN 0 WHEN 'INTERNAL' THEN 1 ELSE 2 END
-            <= CASE p_clearance WHEN 'PUBLIC' THEN 0 WHEN 'INTERNAL' THEN 1 ELSE 2 END
+          CASE d.clearance WHEN 'PUBLIC' THEN 0 WHEN 'INTERNAL' THEN 1 WHEN 'CONFIDENTIAL' THEN 2 END
+            <= CASE p_clearance WHEN 'PUBLIC' THEN 0 WHEN 'INTERNAL' THEN 1 WHEN 'CONFIDENTIAL' THEN 2 ELSE -1 END
           AND (
             NOT EXISTS (SELECT 1 FROM document_departments dd WHERE dd.document_id = d.id)
             OR EXISTS (
@@ -27,8 +27,8 @@ LANGUAGE sql STABLE AS $$
           )
           AND (
             d.minimum_position IS NULL
-            OR CASE d.minimum_position WHEN 'STAFF' THEN 0 WHEN 'SENIOR' THEN 1 WHEN 'MANAGER' THEN 2 ELSE 3 END
-               <= CASE p_position WHEN 'STAFF' THEN 0 WHEN 'SENIOR' THEN 1 WHEN 'MANAGER' THEN 2 ELSE 3 END
+            OR CASE d.minimum_position WHEN 'STAFF' THEN 0 WHEN 'SENIOR' THEN 1 WHEN 'MANAGER' THEN 2 WHEN 'DIRECTOR' THEN 3 END
+               <= CASE p_position WHEN 'STAFF' THEN 0 WHEN 'SENIOR' THEN 1 WHEN 'MANAGER' THEN 2 WHEN 'DIRECTOR' THEN 3 ELSE -1 END
           )
         )
       );

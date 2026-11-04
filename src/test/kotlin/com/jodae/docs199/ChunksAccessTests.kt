@@ -181,6 +181,34 @@ class ChunksAccessTests : IntegrationTestBase() {
     }
 
     @Test
+    fun unknownClearanceOrPositionValuesFailClosedInsteadOfGrantingHighestAccess() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = documentService.createSource(admin, SourceKind.LOCAL, "fail-closed-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val publicDocId =
+            documentService.uploadOne(admin, source.id, "open.md", file("공개"), Clearance.PUBLIC, emptySet(), null).documentId!!
+        val confidentialDocId =
+            documentService
+                .uploadOne(admin, source.id, "secret.md", file("기밀"), Clearance.CONFIDENTIAL, emptySet(), null)
+                .documentId!!
+        val publicVersionId = repository.currentVersion(publicDocId)!!.id
+        val confidentialVersionId = repository.currentVersion(confidentialDocId)!!.id
+
+        val accessible =
+            jdbc
+                .query(
+                    "SELECT * FROM accessible_document_versions(?, ?, ?, ?)",
+                    { rs, _ -> rs.getObject(1, UUID::class.java) },
+                    UUID.randomUUID(),
+                    "NOT_A_REAL_POSITION",
+                    "NOT_A_REAL_CLEARANCE",
+                    false,
+                ).toSet()
+
+        assertFalse(publicVersionId in accessible, "garbage clearance must not even unlock PUBLIC documents")
+        assertFalse(confidentialVersionId in accessible, "garbage clearance must never be treated as the highest clearance")
+    }
+
+    @Test
     fun systemAdminSeesEverythingIncludingRestrictedDocuments() {
         val admin = principal("doc.admin@local.docs199")
         val hr = principal("hr.staff@local.docs199")
