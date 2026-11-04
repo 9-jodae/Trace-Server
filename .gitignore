@@ -9,3 +9,5 @@ build/
 CLAUDE.local.md
 AGENTS.override.md
 .claude/settings.local.json
+.venv/
+__pycache__/
