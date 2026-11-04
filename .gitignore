@@ -6,3 +6,6 @@ build/
 .env
 *.pem
 *.iml
+CLAUDE.local.md
+AGENTS.override.md
+.claude/settings.local.json

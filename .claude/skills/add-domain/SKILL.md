@@ -1,6 +1,6 @@
-﻿---
+---
 name: add-domain
-description: 확정된 요구사항에 따라 새 도메인을 추가합니다.
+description: Add a confirmed domain feature using the repository workflow.
 ---
 
-`AGENTS.md`를 확인하고 `docs/adding-a-domain.md`의 순서를 실행합니다. 권한과 AI 계약의 미확정 항목은 문서에 기록합니다.
+Read `AGENTS.md` and follow `docs/ai/workflows/add-domain.md`. In Claude Code, inspect the relevant files before editing. Report outcomes in Korean.

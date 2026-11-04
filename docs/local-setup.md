@@ -2,6 +2,8 @@
 
 JDK 25, Docker Desktop과 Docker Compose가 필요합니다. Gradle은 고정된 Wrapper가 내려받습니다.
 
+저장소를 복제한 뒤 `git config core.hooksPath .githooks`를 실행해 pre-push 훅을 활성화합니다. 훅은 원격 브랜치 삭제와 non-fast-forward push를 거부합니다. 이미 push한 브랜치는 rebase하지 말고 `git merge`로 갱신합니다.
+
 1. `docker compose up -d`
 2. `./gradlew bootRun` (Windows PowerShell: `.\gradlew.bat bootRun`)
 3. `http://localhost:8080/actuator/health`에서 `UP`을 확인하고 `http://localhost:8080/swagger-ui.html`을 엽니다.
