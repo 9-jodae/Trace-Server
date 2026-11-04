@@ -25,7 +25,7 @@ abstract class IntegrationTestBase {
         @Container
         @JvmStatic
         val minio =
-            GenericContainer<Nothing>("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z").apply {
+            GenericContainer<Nothing>("docs199/minio-local:RELEASE.2025-09-07T16-13-09Z").apply {
                 withExposedPorts(9000)
                 withEnv("MINIO_ROOT_USER", "localminio")
                 withEnv("MINIO_ROOT_PASSWORD", "localminio123")

@@ -14,5 +14,6 @@ jobs:
           distribution: temurin
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v4
-      - run: docker compose pull --quiet
+      - run: docker compose build minio
+      - run: docker pull pgvector/pgvector:0.8.7-pg18
       - run: ./gradlew ktlintCheck test build

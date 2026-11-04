@@ -14,4 +14,4 @@ Checked against official project sources on 2026-11-04:
 
 Kotlin 2.4.21 is the latest stable release (https://github.com/JetBrains/kotlin/releases/tag/v2.4.21), but ktlint Gradle plugin 14.2.0 fails to parse Kotlin 2.4 source and Gradle scripts (`Extensions storage is not registered`). This repository pins one stable step lower, 2.3.21, matching Spring Initializr. Container images and dependencies are fixed to versions, not `latest`.
 
-The MinIO image is a verified, available prebuilt local image. The upstream project now recommends building from source for current releases (https://github.com/minio/minio). A production object-storage image and update policy are **결정 필요**.
+The MinIO image is built locally from the official release binary with architecture-specific SHA-256 verification. The archived Quay image returned 401 on GitHub Actions, so the build no longer depends on that registry. The upstream project now recommends building from source for current releases (https://github.com/minio/minio). A production object-storage image and update policy are **결정 필요**.
