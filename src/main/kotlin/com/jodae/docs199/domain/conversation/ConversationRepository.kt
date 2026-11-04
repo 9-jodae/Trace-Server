@@ -71,7 +71,7 @@ class ConversationRepository(
 
     fun messages(conversationId: UUID): List<ConversationMessageRecord> =
         jdbc.query(
-            "SELECT * FROM conversation_messages WHERE conversation_id = ? ORDER BY created_at",
+            "SELECT * FROM conversation_messages WHERE conversation_id = ? ORDER BY sequence_number",
             ::mapMessage,
             conversationId,
         )

@@ -17,6 +17,8 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
+import java.sql.Timestamp
 import java.util.UUID
 
 class ConversationIntegrationTests : IntegrationTestBase() {
@@ -25,6 +27,8 @@ class ConversationIntegrationTests : IntegrationTestBase() {
     @Autowired lateinit var users: UserRepository
 
     @Autowired lateinit var rest: TestRestTemplate
+
+    @Autowired lateinit var jdbc: JdbcTemplate
 
     private fun principal(email: String): UserPrincipal {
         val user = users.findByEmail(email)!!
@@ -62,6 +66,26 @@ class ConversationIntegrationTests : IntegrationTestBase() {
 
         service.delete(hr, conversation.id)
         assertThrows(ApiException::class.java) { service.detail(hr, conversation.id) }
+    }
+
+    @Test
+    fun messageOrderIsStableWhenCreatedAtTimestampsCollide() {
+        val hr = principal("hr.staff@local.docs199")
+        val conversation = service.create(hr, "순서 테스트")
+        val first = service.addMessage(hr, conversation.id, MessageRole.USER, "첫 번째")
+        val second = service.addMessage(hr, conversation.id, MessageRole.ASSISTANT, "두 번째")
+        val third = service.addMessage(hr, conversation.id, MessageRole.USER, "세 번째")
+        val collided = Timestamp.from(first.createdAt)
+        jdbc.update(
+            "UPDATE conversation_messages SET created_at = ? WHERE id IN (?, ?, ?)",
+            collided,
+            first.id,
+            second.id,
+            third.id,
+        )
+
+        val ordered = service.detail(hr, conversation.id).messages.map { it.content }
+        assertEquals(listOf("첫 번째", "두 번째", "세 번째"), ordered)
     }
 
     @Test
