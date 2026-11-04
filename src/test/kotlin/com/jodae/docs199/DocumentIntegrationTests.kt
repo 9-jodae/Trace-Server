@@ -128,6 +128,41 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     }
 
     @Test
+    fun ownerDepartmentDefaultsAndFiltersIndependentlyOfAccess() {
+        val admin = principal("doc.admin@local.docs199")
+        val hr = principal("hr.staff@local.docs199")
+        val dev = principal("dev.manager@local.docs199")
+        val defaultedSource = service.createSource(admin, SourceKind.LOCAL, "기본소유-${UUID.randomUUID()}", hr.departmentId, Clearance.PUBLIC)
+        val defaultedId =
+            service.uploadOne(admin, defaultedSource.id, "default-owner.md", file("기본"), null, null, null).documentId!!
+        assertEquals(hr.departmentId, repository.document(defaultedId)?.ownerDepartmentId)
+
+        val source = service.createSource(admin, SourceKind.LOCAL, "소유부서-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val id =
+            service
+                .uploadOne(admin, source.id, "owner.md", file("소유 테스트"), null, null, null, dev.departmentId)
+                .documentId!!
+        assertEquals(dev.departmentId, repository.document(id)?.ownerDepartmentId)
+        assertTrue(service.list(hr, DocumentFilter(source.id, null, null, null, null, null, null), 0, 20, false).items.any { it.id == id })
+        assertTrue(
+            service
+                .list(admin, DocumentFilter(null, null, null, null, null, null, null, dev.departmentId), 0, 20, true)
+                .items
+                .any { it.id == id },
+        )
+        assertFalse(
+            service
+                .list(admin, DocumentFilter(null, null, null, null, null, null, null, hr.departmentId), 0, 20, true)
+                .items
+                .any { it.id == id },
+        )
+        service.updateAccess(id, Clearance.PUBLIC, emptySet(), null)
+        assertEquals(dev.departmentId, repository.document(id)?.ownerDepartmentId)
+        service.updateAccess(id, Clearance.PUBLIC, emptySet(), null, hr.departmentId)
+        assertEquals(hr.departmentId, repository.document(id)?.ownerDepartmentId)
+    }
+
+    @Test
     fun callbackRequiresSecret() {
         val body = """{"status":"DONE"}"""
         val request = HttpEntity(body, HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON })

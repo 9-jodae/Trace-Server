@@ -40,6 +40,7 @@ data class AccessRequest(
     val clearance: Clearance,
     val departmentIds: Set<UUID> = emptySet(),
     val minimumPosition: Position?,
+    val ownerDepartmentId: UUID? = null,
 )
 
 data class VersionView(
@@ -91,11 +92,21 @@ class AdminDocumentController(
         @RequestParam(required = false) clearance: Clearance?,
         @RequestParam(required = false) departmentIds: Set<UUID>?,
         @RequestParam(required = false) minimumPosition: Position?,
+        @RequestParam(required = false) ownerDepartmentId: UUID?,
     ): ApiResponse<List<UploadResult>> {
         if (files.size != paths.size) throw ApiException(ErrorCode.INVALID_INPUT, "파일과 상대 경로의 개수가 다릅니다")
         return ApiResponse.ok(
             files.indices.map {
-                service.uploadOne(principal, sourceId, paths[it], files[it], clearance, departmentIds, minimumPosition)
+                service.uploadOne(
+                    principal,
+                    sourceId,
+                    paths[it],
+                    files[it],
+                    clearance,
+                    departmentIds,
+                    minimumPosition,
+                    ownerDepartmentId,
+                )
             },
         )
     }
@@ -110,13 +121,14 @@ class AdminDocumentController(
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) authoredFrom: LocalDate?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) authoredTo: LocalDate?,
         @RequestParam(required = false) status: JobStatus?,
+        @RequestParam(required = false) ownerDepartmentId: UUID?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
     ): ApiResponse<PageResponse<DocumentRecord>> =
         ApiResponse.ok(
             service.list(
                 principal,
-                DocumentFilter(sourceId, sourceKind, extension, documentType, authoredFrom, authoredTo, status),
+                DocumentFilter(sourceId, sourceKind, extension, documentType, authoredFrom, authoredTo, status, ownerDepartmentId),
                 page,
                 size,
                 true,
@@ -133,7 +145,11 @@ class AdminDocumentController(
     fun access(
         @PathVariable id: UUID,
         @RequestBody request: AccessRequest,
-    ) = ApiResponse.ok(service.updateAccess(id, request.clearance, request.departmentIds, request.minimumPosition).view())
+    ) = ApiResponse.ok(
+        service
+            .updateAccess(id, request.clearance, request.departmentIds, request.minimumPosition, request.ownerDepartmentId)
+            .view(),
+    )
 
     @PostMapping("/documents/{id}/revisions")
     fun revise(
@@ -185,12 +201,13 @@ class EmployeeDocumentController(
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) authoredFrom: LocalDate?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) authoredTo: LocalDate?,
         @RequestParam(required = false) status: JobStatus?,
+        @RequestParam(required = false) ownerDepartmentId: UUID?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
     ) = ApiResponse.ok(
         service.list(
             principal,
-            DocumentFilter(sourceId, sourceKind, extension, documentType, authoredFrom, authoredTo, status),
+            DocumentFilter(sourceId, sourceKind, extension, documentType, authoredFrom, authoredTo, status, ownerDepartmentId),
             page,
             size,
             false,

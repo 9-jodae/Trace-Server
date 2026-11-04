@@ -81,6 +81,7 @@ class DocumentService(
         clearance: Clearance?,
         departments: Set<UUID>?,
         minimumPosition: Position?,
+        ownerDepartmentId: UUID? = null,
     ): UploadResult {
         val normalized = path.replace('\\', '/').trim('/')
         val parts = normalized.split('/')
@@ -107,6 +108,8 @@ class DocumentService(
         val effectiveDepartments = departments ?: source.defaultDepartmentId?.let(::setOf) ?: emptySet()
         validateDepartments(effectiveDepartments)
         if (previous == null) {
+            val effectiveOwner = ownerDepartmentId ?: source.defaultDepartmentId
+            effectiveOwner?.let { validateDepartments(setOf(it)) }
             repository.insertDocument(
                 DocumentRecord(
                     documentId,
@@ -122,12 +125,19 @@ class DocumentService(
                     minimumPosition,
                     0,
                     null,
+                    effectiveOwner,
                 ),
             )
             repository.setDepartments(documentId, effectiveDepartments)
-        } else if (clearance != null || departments != null || minimumPosition != null) {
-            repository.updateAccess(documentId, clearance ?: previous.clearance, minimumPosition ?: previous.minimumPosition)
-            if (departments != null) repository.setDepartments(documentId, departments)
+        } else {
+            if (clearance != null || departments != null || minimumPosition != null) {
+                repository.updateAccess(documentId, clearance ?: previous.clearance, minimumPosition ?: previous.minimumPosition)
+                if (departments != null) repository.setDepartments(documentId, departments)
+            }
+            if (ownerDepartmentId != null) {
+                validateDepartments(setOf(ownerDepartmentId))
+                repository.updateOwnerDepartment(documentId, ownerDepartmentId)
+            }
         }
         val versionId = UUID.randomUUID()
         val key = "documents/$documentId/$versionId"
@@ -189,13 +199,22 @@ class DocumentService(
         clearance: Clearance,
         departments: Set<UUID>,
         position: Position?,
+        ownerDepartmentId: UUID? = null,
     ): DocumentDetail {
         val doc = repository.document(id) ?: throw ApiException(ErrorCode.NOT_FOUND)
         validateDepartments(departments)
         repository.updateAccess(id, clearance, position)
         repository.setDepartments(id, departments)
+        if (ownerDepartmentId != null) {
+            validateDepartments(setOf(ownerDepartmentId))
+            repository.updateOwnerDepartment(id, ownerDepartmentId)
+        }
         return DocumentDetail(
-            doc.copy(clearance = clearance, minimumPosition = position),
+            doc.copy(
+                clearance = clearance,
+                minimumPosition = position,
+                ownerDepartmentId = ownerDepartmentId ?: doc.ownerDepartmentId,
+            ),
             departments,
             repository.versions(id),
             repository.currentVersion(id)?.let { repository.jobForVersion(it.id) },

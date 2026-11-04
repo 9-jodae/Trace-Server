@@ -41,6 +41,7 @@ data class DocumentRecord(
     val minimumPosition: Position?,
     val currentVersion: Int,
     val deletedAt: Instant?,
+    val ownerDepartmentId: UUID? = null,
 )
 
 data class VersionRecord(
@@ -71,6 +72,7 @@ data class DocumentFilter(
     val authoredFrom: LocalDate?,
     val authoredTo: LocalDate?,
     val status: JobStatus?,
+    val ownerDepartmentId: UUID? = null,
 )
 
 @Repository
@@ -110,7 +112,8 @@ class DocumentRepository(
     fun insertDocument(document: DocumentRecord) {
         jdbc.update(
             """INSERT INTO documents(id, source_id, external_id, title, relative_path, extension, document_type, author,
-               authored_at, clearance, minimum_position, current_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               authored_at, clearance, minimum_position, current_version, owner_department_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             document.id,
             document.sourceId,
             document.externalId,
@@ -123,7 +126,15 @@ class DocumentRepository(
             document.clearance.name,
             document.minimumPosition?.name,
             document.currentVersion,
+            document.ownerDepartmentId,
         )
+    }
+
+    fun updateOwnerDepartment(
+        id: UUID,
+        ownerDepartmentId: UUID?,
+    ) {
+        jdbc.update("UPDATE documents SET owner_department_id = ?, updated_at = now() WHERE id = ?", ownerDepartmentId, id)
     }
 
     fun updateVersion(
@@ -291,6 +302,10 @@ class DocumentRepository(
             where.append(" AND EXISTS (SELECT 1 FROM sources s WHERE s.id = d.source_id AND s.kind = :sourceKind)")
             p.addValue("sourceKind", it.name)
         }
+        filter.ownerDepartmentId?.let {
+            where.append(" AND d.owner_department_id = :ownerDepartmentId")
+            p.addValue("ownerDepartmentId", it)
+        }
         filter.extension?.let {
             where.append(" AND d.extension = :extension")
             p.addValue("extension", it.lowercase())
@@ -363,6 +378,7 @@ class DocumentRepository(
         rs.getString("minimum_position")?.let(Position::valueOf),
         rs.getInt("current_version"),
         rs.getTimestamp("deleted_at")?.toInstant(),
+        rs.getObject("owner_department_id", UUID::class.java),
     )
 
     private fun mapVersion(
