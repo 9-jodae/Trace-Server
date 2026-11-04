@@ -154,7 +154,7 @@ DELETE /api/conversations/{id}
 
 ## 질문
 
-최소 버전입니다([Issue #20](https://github.com/9-jodae/docs199-Server/issues/20) 참고, 완전한 근거 조회 API는 아직 없음).
+최소 버전입니다([Issue #20](https://github.com/9-jodae/docs199-Server/issues/20) 참고).
 
 ```http
 POST /api/conversations/messages        (새 대화)
@@ -165,11 +165,26 @@ Authorization: Bearer <token>
 {"message": "연차는 며칠까지 이월할 수 있나요?"}
 ```
 
-응답 `data`: `{"conversationId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","documentTitle","versionId","charStart","charEnd"}], "failedSources", "fallbackReason"}`. `sources`는 사용자가 접근할 수 없는 문서의 출처를 제외한 목록입니다. SSE가 아닌 단건 응답이며, AI 서버 처리 시간 때문에 최대 70초까지 걸릴 수 있습니다. 다른 사람의 대화 ID로 질문하면 `NOT_FOUND`입니다.
+응답 `data`: `{"conversationId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","documentTitle","versionId","charStart","charEnd"}], "failedSources", "fallbackReason"}`. `sources`는 사용자가 접근할 수 없는 문서의 출처를 제외한 목록입니다. SSE가 아닌 단건 응답이며, AI 서버 처리 시간 때문에 최대 70초까지 걸릴 수 있습니다. 다른 사람의 대화 ID로 질문하면 `NOT_FOUND`입니다. `sources[].id`는 아래 근거 조회 API의 `{chunkId}`로 그대로 씁니다.
+
+## 근거 조회
+
+질문 응답의 출처(`sources[].id`)를 눌렀을 때 원문 맥락과 하이라이트 위치를 보여주는 API입니다([Issue #21](https://github.com/9-jodae/docs199-Server/issues/21)).
+
+```http
+GET /api/evidence/{chunkId}
+Authorization: Bearer <token>
+```
+
+응답 `data`: `{"chunkId", "documentId", "documentTitle", "extension", "versionId", "versionNumber", "content", "charStart", "charEnd", "page", "previousChunk", "nextChunk", "downloadUrl"}`.
+
+- `content`가 현재 청크의 전체 텍스트이고, `charStart`/`charEnd`는 그 안에서 하이라이트할 위치입니다(둘 다 있으면 `content.substring(charStart, charEnd)`를 강조 표시). PDF는 아직 페이지·좌표(`bbox`)가 없어 `page`만 있고 `charStart`/`charEnd`가 `null`일 수 있습니다.
+- `previousChunk`/`nextChunk`는 앞뒤 문맥용 텍스트이며 문서의 시작·끝이면 `null`입니다. 화면에는 `previousChunk` → `content`(하이라이트) → `nextChunk` 순서로 이어 붙여 보여주면 자연스럽습니다.
+- `downloadUrl`은 원문 파일의 15분짜리 Presigned URL입니다(화면에 노출·로그 금지).
+- 청크 ID가 없거나, 삭제된 문서·이전 버전에 속하거나, 사용자가 접근할 수 없는 문서면 전부 `NOT_FOUND`로 응답합니다(어느 경우인지 구분하지 않음).
 
 ## 아직 준비 중인 것
 
-- **근거 조회 API**: 근거를 단독으로 다시 조회하는 API([Issue #21](https://github.com/9-jodae/docs199-Server/issues/21)). 지금은 질문 응답의 `sources`로만 근거를 받습니다.
-- **문서 관계 그래프 API**: 문서 간 참조·유사도 그래프([Issue #15](https://github.com/9-jodae/docs199-Server/issues/15) 이후, 벡터 저장소 확정 대기 중).
+- **문서 관계 그래프 API**: 문서 간 참조·유사도 그래프([Issue #15](https://github.com/9-jodae/docs199-Server/issues/15) 이후).
 
 화면 설계를 먼저 시작해도 되지만, 실제 연동은 해당 Issue가 닫힌 뒤에 가능합니다.
