@@ -98,3 +98,23 @@ Authorization: Bearer <token>
 ## 다음 단계
 
 주제 간선 구현은 기본 비활성화 상태로 제공됩니다. AI 적재기에서 주제 생성·저장을 합의한 뒤 시연 환경에서 설정을 켜 검증합니다.
+
+## `REFERENCES` 경고
+
+`REFERENCES` 엣지에는 `warnings` 배열이 포함됩니다. 경고가 없으면 빈 배열입니다. `source`는 참조하는 문서, `target`은 참조되는 문서입니다.
+
+- `SECURITY_RISK`: 참조 문서의 보안 등급이 대상 문서보다 낮을 때 포함됩니다. 비교 순서는 `PUBLIC < INTERNAL < CONFIDENTIAL`입니다.
+- `CONTENT_CHECK`: 대상 문서의 현재 버전 생성 시각이 참조 문서의 현재 버전보다 늦을 때 포함되며, `modifiedDocumentId`에 대상 문서 ID가 담깁니다.
+- 다른 관계 유형에는 경고가 적용되지 않습니다. 권한상 볼 수 없는 문서와 그 관계는 응답에 포함되지 않으며, 경고 계산에도 영향을 주지 않습니다. 경고에는 보안 등급 값이 포함되지 않습니다.
+
+예시:
+
+```json
+{
+  "type": "REFERENCES",
+  "warnings": [
+    { "type": "SECURITY_RISK" },
+    { "type": "CONTENT_CHECK", "modifiedDocumentId": "<참조 대상 문서 UUID>" }
+  ]
+}
+```

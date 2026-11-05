@@ -192,5 +192,16 @@ class GraphService(
             type,
             if (type == RelationType.REFERENCES) "참조" else "충돌",
             detail,
+            warnings =
+                if (type != RelationType.REFERENCES) {
+                    emptyList()
+                } else {
+                    buildList {
+                        if (sourceClearance.ordinal < targetClearance.ordinal) add(GraphWarning(GraphWarningType.SECURITY_RISK))
+                        if (targetVersionCreatedAt.isAfter(sourceVersionCreatedAt)) {
+                            add(GraphWarning(GraphWarningType.CONTENT_CHECK, target))
+                        }
+                    }
+                },
         )
 }

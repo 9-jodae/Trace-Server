@@ -23,6 +23,10 @@ data class GraphRelationRow(
     val target: UUID,
     val type: RelationType,
     val detail: ConflictDetail?,
+    val sourceClearance: Clearance = Clearance.PUBLIC,
+    val targetClearance: Clearance = Clearance.PUBLIC,
+    val sourceVersionCreatedAt: java.time.Instant = java.time.Instant.EPOCH,
+    val targetVersionCreatedAt: java.time.Instant = java.time.Instant.EPOCH,
 )
 
 data class GraphDocumentTopicRow(
@@ -88,8 +92,15 @@ class GraphRepository(
     fun relationsBetweenAccessibleDocuments(scope: AccessScope): List<GraphRelationRow> =
         jdbc.query(
             """
-            SELECT r.id, r.source_document_id, r.target_document_id, r.relation_type, r.detail::text AS detail
+            SELECT r.id, r.source_document_id, r.target_document_id, r.relation_type, r.detail::text AS detail,
+                   source.clearance AS source_clearance, target.clearance AS target_clearance,
+                   source_version.created_at AS source_version_created_at,
+                   target_version.created_at AS target_version_created_at
             FROM document_relations r
+            JOIN documents source ON source.id = r.source_document_id
+            JOIN documents target ON target.id = r.target_document_id
+            JOIN document_versions source_version ON source_version.document_id = source.id AND source_version.version_number = source.current_version
+            JOIN document_versions target_version ON target_version.document_id = target.id AND target_version.version_number = target.current_version
             WHERE r.source_document_id IN (
                 SELECT d.id FROM documents d
                 JOIN document_versions dv ON dv.document_id = d.id AND dv.version_number = d.current_version
@@ -112,6 +123,10 @@ class GraphRepository(
                     rs.getObject("target_document_id", UUID::class.java),
                     type,
                     rs.getString("detail")?.let(ConflictDetail::fromJson),
+                    Clearance.valueOf(rs.getString("source_clearance")),
+                    Clearance.valueOf(rs.getString("target_clearance")),
+                    rs.getTimestamp("source_version_created_at").toInstant(),
+                    rs.getTimestamp("target_version_created_at").toInstant(),
                 )
             },
             *scopeParams(scope, repeat = 2),
@@ -171,8 +186,15 @@ class GraphRepository(
         jdbc
             .query(
                 """
-                SELECT r.id, r.source_document_id, r.target_document_id, r.relation_type, r.detail::text AS detail
+                SELECT r.id, r.source_document_id, r.target_document_id, r.relation_type, r.detail::text AS detail,
+                       source.clearance AS source_clearance, target.clearance AS target_clearance,
+                       source_version.created_at AS source_version_created_at,
+                       target_version.created_at AS target_version_created_at
                 FROM document_relations r
+                JOIN documents source ON source.id = r.source_document_id
+                JOIN documents target ON target.id = r.target_document_id
+                JOIN document_versions source_version ON source_version.document_id = source.id AND source_version.version_number = source.current_version
+                JOIN document_versions target_version ON target_version.document_id = target.id AND target_version.version_number = target.current_version
                 WHERE r.id = ?
                   AND EXISTS (
                     SELECT 1 FROM documents d
@@ -195,6 +217,10 @@ class GraphRepository(
                         rs.getObject("target_document_id", UUID::class.java),
                         type,
                         rs.getString("detail")?.let(ConflictDetail::fromJson),
+                        Clearance.valueOf(rs.getString("source_clearance")),
+                        Clearance.valueOf(rs.getString("target_clearance")),
+                        rs.getTimestamp("source_version_created_at").toInstant(),
+                        rs.getTimestamp("target_version_created_at").toInstant(),
                     )
                 },
                 id,
