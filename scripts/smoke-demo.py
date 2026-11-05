@@ -52,6 +52,23 @@ def login(session, base, email, password):
     return data["accessToken"]
 
 
+def list_all_documents(session, base, token):
+    """Fetch every page from GET /api/documents while preserving the first page metadata."""
+    page = 0
+    first_page = None
+    items = []
+    while True:
+        result = api(session, base, "GET", f"/api/documents?page={page}&size=100", token=token, timeout=30)
+        if first_page is None:
+            first_page = result
+        items.extend(result.get("items", []))
+        total_pages = result.get("totalPages")
+        if total_pages is None or page + 1 >= total_pages:
+            break
+        page += 1
+    return {**(first_page or {}), "items": items}
+
+
 def validate_base_url(base):
     parsed = urllib.parse.urlparse(base)
     return parsed.scheme == "https" or (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"})
@@ -81,7 +98,7 @@ def scenario_accounts(cases):
 
 def check_evidence_visibility(session, base, token, manifest_paths, case):
     """계정 본인의 GET /api/documents 목록에서 근거 문서가 보이는지 확인한다(AI 응답과 무관하게 Spring 접근 제어를 직접 검증)."""
-    own_docs = api(session, base, "GET", "/api/documents?size=100", token=token, timeout=30)
+    own_docs = list_all_documents(session, base, token)
     visible_paths = {item.get("relativePath") for item in own_docs.get("items", [])}
     visible_ids = {item.get("id") for item in own_docs.get("items", [])}
     evidence_paths = [manifest_paths.get(item["documentId"]) for item in case["evidence"]]
@@ -157,7 +174,7 @@ def run_scenario_group(session, base, tokens, manifest_paths, group_name, cases,
                 leaked = [
                     item["excerpt"] for item in case["evidence"]
                     if item["excerpt"] in quoted and manifest_paths.get(item["documentId"]) not in
-                    {d.get("relativePath") for d in api(session, base, "GET", "/api/documents?size=100", token=token).get("items", [])}
+                    {d.get("relativePath") for d in list_all_documents(session, base, token).get("items", [])}
                 ]
                 if leaked:
                     rows.append((label, "FAIL", "비인가 근거 노출: " + ", ".join(leaked)))
@@ -207,7 +224,7 @@ def main():
             token = login(session, base, email, password)
             tokens[email] = token
             me = api(session, base, "GET", "/api/users/me", token=token)
-            docs = api(session, base, "GET", "/api/documents?size=100", token=token)
+            docs = list_all_documents(session, base, token)
             rows.append(
                 (
                     f"계정 {email}",

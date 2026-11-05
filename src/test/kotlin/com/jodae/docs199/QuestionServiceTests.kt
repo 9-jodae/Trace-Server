@@ -72,6 +72,61 @@ class FakeAgentChatClient : AgentChatClient {
 
 class AgentChatHttpTests {
     @Test
+    fun ignoresUnknownFieldsInFullAiResponseFixture() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/agent/chat") { exchange ->
+            val reply =
+                """
+                {
+                  "threadId":"thread","answer":"ok","answerType":"ANSWER","route":"SEARCH","contextProbability":0.91,
+                  "sources":[{"id":"00000000-0000-0000-0000-000000000001","text":"text","source":"doc","futureSourceField":{"x":1}}],
+                  "evidence":[{"chunkId":"00000000-0000-0000-0000-000000000001","source":"doc","quote":"quote","futureEvidenceField":true}],
+                  "keywords":[{"text":"key","chunkId":"00000000-0000-0000-0000-000000000001","rank":1}],
+                  "failedSources":[],"fallbackReason":null,"editProposals":[{"documentId":"reserved","changes":[]}],"futureTopLevelField":{"enabled":true}
+                }
+                """.trimIndent().toByteArray()
+            exchange.responseHeaders.set("Content-Type", "application/json")
+            exchange.sendResponseHeaders(200, reply.size.toLong())
+            exchange.responseBody.use { it.write(reply) }
+        }
+        server.start()
+        try {
+            val client = HttpAgentChatClient("http://127.0.0.1:${server.address.port}", 5, "test-secret")
+            val response = client.chat(AgentChatRequest("q", "thread"))
+            assertEquals("ok", response.answer)
+            assertEquals("text", response.sources.single().text)
+            assertEquals("quote", response.evidence.single().quote)
+            assertEquals("key", response.keywords.single().text)
+            assertEquals(null, response.sources.single().documentId)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun acceptsMissingOptionalFieldsInAiResponseFixture() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/agent/chat") { exchange ->
+            val reply = """{"threadId":"thread","answer":"ok","newTopLevelField":1}""".toByteArray()
+            exchange.responseHeaders.set("Content-Type", "application/json")
+            exchange.sendResponseHeaders(200, reply.size.toLong())
+            exchange.responseBody.use { it.write(reply) }
+        }
+        server.start()
+        try {
+            val client = HttpAgentChatClient("http://127.0.0.1:${server.address.port}", 5, "test-secret")
+            val response = client.chat(AgentChatRequest("q", "thread"))
+            assertEquals("ok", response.answer)
+            assertTrue(response.sources.isEmpty())
+            assertTrue(response.evidence.isEmpty())
+            assertTrue(response.keywords.isEmpty())
+            assertEquals(null, response.answerType)
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun sendsAccessScopeWithExactAiContractFields() {
         val received = AtomicReference<String>()
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)

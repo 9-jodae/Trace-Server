@@ -1,5 +1,6 @@
 package com.jodae.docs199.domain.conversation
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
@@ -31,6 +32,7 @@ data class AgentChatRequest(
     val accessScope: AgentAccessScope? = null,
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class AgentSource(
     val id: String,
     val text: String,
@@ -41,6 +43,7 @@ data class AgentSource(
     val charEnd: Int? = null,
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class AgentEvidence(
     val chunkId: String,
     val source: String,
@@ -51,6 +54,7 @@ data class AgentEvidence(
     val charEnd: Int? = null,
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class AgentKeyword(
     val text: String,
     val chunkId: String,
@@ -63,6 +67,7 @@ enum class AnswerType {
     SMALL_TALK,
 }
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class AgentChatResponse(
     val threadId: String,
     val answer: String,
