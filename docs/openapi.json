@@ -1926,6 +1926,12 @@
             }, {
               "type" : "null"
             } ]
+          },
+          "warnings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/GraphWarning"
+            }
           }
         }
       },
@@ -2332,6 +2338,19 @@
             }, {
               "type" : "null"
             } ]
+          }
+        }
+      },
+      "GraphWarning" : {
+        "type" : "object",
+        "properties" : {
+          "type" : {
+            "type" : "string",
+            "enum" : [ "SECURITY_RISK", "CONTENT_CHECK" ]
+          },
+          "modifiedDocumentId" : {
+            "type" : [ "string", "null" ],
+            "format" : "uuid"
           }
         }
       }
