@@ -343,6 +343,36 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     }
 
     @Test
+    fun multipartRequestCanContainMultipleFilesAboveTheFormerAggregateLimit() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "batch-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val tokenBody = rest.postForEntity("/api/dev/token", null, String::class.java).body!!
+        val token = Regex("\"accessToken\":\"([^\"]+)\"").find(tokenBody)!!.groupValues[1]
+        val form = LinkedMultiValueMap<String, Any>()
+        form.add("paths", "first.md")
+        form.add("paths", "second.md")
+        val content = ByteArray(11 * 1024 * 1024) { 'x'.code.toByte() }
+        repeat(2) { index ->
+            form.add(
+                "files",
+                object : ByteArrayResource(content) {
+                    override fun getFilename() = "file-$index.md"
+                },
+            )
+        }
+        val headers =
+            HttpHeaders().apply {
+                contentType = MediaType.MULTIPART_FORM_DATA
+                setBearerAuth(token)
+            }
+
+        val upload = rest.postForEntity("/api/admin/sources/${source.id}/documents", HttpEntity(form, headers), String::class.java)
+
+        assertEquals(HttpStatus.OK, upload.statusCode)
+        assertEquals(2, Regex("\"outcome\":\"CREATED\"").findAll(upload.body!!).count())
+    }
+
+    @Test
     fun staleAndDuplicateCallbacksDoNotChangeLatestVersion() {
         val admin = principal("doc.admin@local.docs199")
         val source = service.createSource(admin, SourceKind.LOCAL, "콜백-${UUID.randomUUID()}", null, Clearance.PUBLIC)
