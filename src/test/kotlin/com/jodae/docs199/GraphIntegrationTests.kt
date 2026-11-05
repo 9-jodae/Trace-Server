@@ -176,7 +176,6 @@ class GraphIntegrationTests : IntegrationTestBase() {
         assertFalse(jdbc.queryForObject("SELECT has_table_privilege('ai_app', 'document_topics', 'SELECT')", Boolean::class.java)!!)
     }
 
-    @Test
     private fun topicLimitTestVersion(): UUID {
         val systemAdmin = principal("system.admin@local.docs199")
         val source = documents.createSource(systemAdmin, SourceKind.LOCAL, "topic-limits-${UUID.randomUUID()}", null, Clearance.PUBLIC)
