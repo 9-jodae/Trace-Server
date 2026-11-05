@@ -6,7 +6,7 @@
 
 - 로컬: `http://localhost:8080`
 - 팀 서버(현재 HTTP): `http://3.0.74.114:8080`, `http://api.docs199.exijn.com:8080`
-- 팀 서버(HTTPS 적용 후): `https://api.docs199.exijn.com` — HTTPS 전환이 끝나면 프론트·앱의 API 기본 주소를 이 값으로 설정합니다. CORS는 서버 `.env`의 `CORS_ORIGINS`에 등록된 출처만 허용하므로, 프론트 배포 주소가 정해지면 정확한 HTTPS origin을 서버 설정 담당자에게 전달하세요([Issue #8](https://github.com/9-jodae/docs199-Server/issues/8) 참고). 전환 중에는 HTTPS 헬스체크가 성공하기 전까지 기존 HTTP 주소를 유지합니다.
+- 팀 서버(HTTPS 적용 후): `https://api.docs199.exijn.com` — HTTPS 전환이 끝나면 프론트·앱의 API 기본 주소를 이 값으로 설정합니다. CORS는 서버 `.env`의 `CORS_ORIGINS`에 등록된 출처만 허용하므로, 프론트 배포 주소가 정해지면 정확한 HTTPS origin을 서버 설정 담당자에게 전달하세요([Issue #8](https://github.com/9-jodae/Trace-Server/issues/8) 참고). 전환 중에는 HTTPS 헬스체크가 성공하기 전까지 기존 HTTP 주소를 유지합니다.
 
 ### 외부 공개 범위
 
@@ -215,7 +215,7 @@ DELETE /api/conversations/{id}
 
 ## 질문
 
-최소 버전입니다([Issue #20](https://github.com/9-jodae/docs199-Server/issues/20) 참고).
+최소 버전입니다([Issue #20](https://github.com/9-jodae/Trace-Server/issues/20) 참고).
 
 ```http
 POST /api/conversations/messages        (새 대화)
@@ -249,7 +249,7 @@ AI가 Spring에 보내는 evidence의 `documentId`, `versionId`, `charStart`, `c
 
 ## 근거 조회
 
-질문 응답의 출처(`sources[].id`)를 눌렀을 때 원문 맥락과 하이라이트 위치를 보여주는 API입니다([Issue #21](https://github.com/9-jodae/docs199-Server/issues/21)).
+질문 응답의 출처(`sources[].id`)를 눌렀을 때 원문 맥락과 하이라이트 위치를 보여주는 API입니다([Issue #21](https://github.com/9-jodae/Trace-Server/issues/21)).
 
 ```http
 GET /api/evidence/{chunkId}

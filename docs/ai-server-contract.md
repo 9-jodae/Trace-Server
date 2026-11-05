@@ -157,7 +157,7 @@ DB 접속은 `DATABASE_URL` 또는 환경 변수·`.env`의 `DB_PASSWORD`, `DB_U
 
 ## 답변 생성 모델 (현재 AI 구현 기준)
 
-AI 팀은 Bedrock의 Claude Sonnet 5.5를 답변 생성 모델로 사용한다고 확인했습니다([#14 댓글](https://github.com/9-jodae/docs199-Server/issues/14#issuecomment-6648484441)). AI 서버 설정은 다음과 같습니다.
+AI 팀은 Bedrock의 Claude Sonnet 5.5를 답변 생성 모델로 사용한다고 확인했습니다([#14 댓글](https://github.com/9-jodae/Trace-Server/issues/14#issuecomment-6648484441)). AI 서버 설정은 다음과 같습니다.
 
 - 모델 ID: `global.anthropic.claude-sonnet-5-5`
 - `LLM_MODEL=bedrock:global.anthropic.claude-sonnet-5-5`

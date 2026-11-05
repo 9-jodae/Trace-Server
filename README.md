@@ -1,4 +1,4 @@
-﻿# docs199 서버
+﻿# Trace 서버
 
 사내 문서 검색 서비스를 위한 Kotlin/Spring Boot 백엔드입니다.
 
