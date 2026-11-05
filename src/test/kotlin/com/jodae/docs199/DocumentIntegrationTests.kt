@@ -9,6 +9,7 @@ import com.jodae.docs199.domain.document.IngestionAfterCommit
 import com.jodae.docs199.domain.document.JobStatus
 import com.jodae.docs199.domain.document.JobUpdater
 import com.jodae.docs199.domain.document.SourceKind
+import com.jodae.docs199.domain.document.SourceRecord
 import com.jodae.docs199.domain.document.StorageCleanupQueue
 import com.jodae.docs199.domain.document.StorageCleanupWorker
 import com.jodae.docs199.domain.document.VersionRecord
@@ -144,6 +145,17 @@ class DocumentIntegrationTests : IntegrationTestBase() {
             )
         assertEquals("CREATED", differentExternalId.outcome)
         assertTrue(differentExternalId.documentId != documentId)
+    }
+
+    @Test
+    fun multipartAdapterRejectsNotionSources() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = SourceRecord(UUID.randomUUID(), SourceKind.NOTION, "notion-${UUID.randomUUID()}", null, Clearance.PUBLIC, admin.userId)
+        repository.createSource(source)
+
+        assertThrows(ApiException::class.java) {
+            service.uploadOne(admin, source.id, "page.md", file("content"), null, null, null)
+        }
     }
 
     @Test

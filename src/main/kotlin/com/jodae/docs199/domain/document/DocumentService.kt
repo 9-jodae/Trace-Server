@@ -98,6 +98,8 @@ class DocumentService(
         }
         val extension = normalized.substringAfterLast('.', "").lowercase()
         if (extension !in allowed) return UploadResult(path, null, null, "EXCLUDED", "허용되지 않는 확장자")
+        val source = repository.source(sourceId) ?: throw ApiException(ErrorCode.NOT_FOUND)
+        if (source.kind == SourceKind.NOTION) throw ApiException(ErrorCode.INVALID_INPUT)
         val bytes = file.bytes
         return upsertDocument(
             principal = principal,
