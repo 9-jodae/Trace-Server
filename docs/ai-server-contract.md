@@ -206,8 +206,8 @@ Spring은 청크 ID를 UUID로 해석하고 DB에서 현재 버전과 `AccessPol
 
 DB는 버전당 최대 3개, 주제당 최대 100자를 강제합니다.
 
-문서 적재 단계에서 문서별 주제 1~3개를 생성하면, AI는 해당 문서 버전의 주제를 PostgreSQL `document_topics(document_version_id, topic)`에 기록합니다. 주제는 앞뒤 공백을 제거하고 같은 버전 안에서 대소문자를 무시해 중복을 막습니다. 같은 버전을 다시 처리할 때는 해당 버전 행을 삭제한 뒤 새 주제를 넣어 멱등하게 교체합니다.
+문서 적재 단계에서 문서별 주제 1~3개를 생성하면, AI는 `replace_document_topics(version_id, topics)` 함수를 호출해 해당 문서 버전의 주제를 PostgreSQL `document_topics(document_version_id, topic)`에 기록합니다. 주제는 앞뒤 공백을 제거하고 같은 버전 안에서 대소문자를 무시해 중복을 막습니다. 같은 버전을 다시 처리할 때도 함수가 버전 잠금 아래 기존 주제를 원자적으로 교체합니다.
 
-Flyway V15가 `ai_app`에 `document_topics`의 `INSERT`, `DELETE` 권한만 부여합니다. `SELECT` 권한은 없습니다. 다른 테이블 권한은 변경하지 않습니다. AI 적재기는 topic 생성 기능을 기본 비활성화하고 시연 문서에 한정해 사용해야 합니다. AI 저장소의 설정 키와 기능 활성화 시점은 AI 팀이 정합니다.
+Flyway V15는 `ai_app`에 테이블 직접 접근 권한을 주지 않습니다. AI는 `replace_document_topics(version_id, topics)` 보안 함수만 실행할 수 있고, 이 함수가 버전 잠금 아래 기존 주제를 원자적으로 교체합니다. 함수가 버전당 최대 3개·주제당 최대 100자를 검증합니다. 다른 테이블 권한은 변경하지 않습니다. AI 적재기는 주제 생성 기능을 기본 비활성화하고 시연 문서에 한정해 사용해야 합니다. AI 저장소의 설정 키와 기능 활성화 시점은 AI 팀이 정합니다.
 
 Spring의 `GET /api/graph`는 `GRAPH_TOPIC_EDGES_ENABLED=true`일 때만 주제 행을 조회합니다. 기본값은 `false`입니다. Spring은 접근 가능한 현재 버전만 읽고 공통 주제를 `TOPIC` 간선으로 계산합니다. 문서별 주제 결과와 간선 제한은 `docs/graph-api.md`를 참고하세요. AI 적재기는 `document_relations`를 읽거나 쓰지 않습니다.

@@ -25,10 +25,17 @@ import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.ConnectionCallback
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.test.context.TestPropertySource
+import java.sql.Connection
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 @TestPropertySource(properties = ["app.graph.topic-edges-enabled=true"])
 class GraphIntegrationTests : IntegrationTestBase() {
@@ -171,9 +178,120 @@ class GraphIntegrationTests : IntegrationTestBase() {
 
     @Test
     fun aiRoleCanReplaceTopicsWithoutReadingThem() {
-        assertTrue(jdbc.queryForObject("SELECT has_table_privilege('ai_app', 'document_topics', 'INSERT')", Boolean::class.java)!!)
-        assertTrue(jdbc.queryForObject("SELECT has_table_privilege('ai_app', 'document_topics', 'DELETE')", Boolean::class.java)!!)
+        assertFalse(jdbc.queryForObject("SELECT has_table_privilege('ai_app', 'document_topics', 'INSERT')", Boolean::class.java)!!)
+        assertFalse(jdbc.queryForObject("SELECT has_table_privilege('ai_app', 'document_topics', 'DELETE')", Boolean::class.java)!!)
         assertFalse(jdbc.queryForObject("SELECT has_table_privilege('ai_app', 'document_topics', 'SELECT')", Boolean::class.java)!!)
+        assertTrue(
+            jdbc.queryForObject(
+                "SELECT has_function_privilege('ai_app', 'public.replace_document_topics(uuid,text[])', 'EXECUTE')",
+                Boolean::class.java,
+            )!!,
+        )
+    }
+
+    private fun replaceTopicsAsAi(
+        versionId: UUID,
+        topics: List<String>,
+    ) {
+        jdbc.execute(
+            ConnectionCallback { connection ->
+                connection.createStatement().use { it.execute("SET ROLE ai_app") }
+                try {
+                    replaceTopics(connection, versionId, topics)
+                } finally {
+                    connection.createStatement().use { it.execute("RESET ROLE") }
+                }
+            },
+        )
+    }
+
+    private fun replaceTopics(
+        connection: Connection,
+        versionId: UUID,
+        topics: List<String>,
+    ) {
+        connection.prepareStatement("SELECT replace_document_topics(?, ?::text[])").use { statement ->
+            statement.setObject(1, versionId)
+            statement.setArray(2, connection.createArrayOf("text", topics.toTypedArray()))
+            statement.executeQuery().use { }
+        }
+    }
+
+    @Test
+    fun aiRoleCanAtomicallyReplaceTopicsWithoutDirectTableAccess() {
+        val versionId = topicLimitTestVersion()
+        replaceTopicsAsAi(versionId, listOf("old topic"))
+        replaceTopicsAsAi(versionId, listOf("new topic", "second topic"))
+
+        val topics =
+            jdbc.queryForList(
+                "SELECT topic FROM document_topics WHERE document_version_id = ? ORDER BY topic",
+                String::class.java,
+                versionId,
+            )
+        assertEquals(listOf("new topic", "second topic"), topics)
+    }
+
+    @Test
+    fun concurrentAiReplacementsAreSerializedByVersionLock() {
+        val versionId = topicLimitTestVersion()
+        val firstConnection = jdbc.dataSource!!.connection
+        val secondStarted = CountDownLatch(1)
+        val secondBackendPid = AtomicInteger()
+        val executor = Executors.newSingleThreadExecutor()
+        var secondFuture: CompletableFuture<Void>? = null
+
+        try {
+            firstConnection.autoCommit = false
+            firstConnection.createStatement().use { it.execute("SET LOCAL ROLE ai_app") }
+            replaceTopics(firstConnection, versionId, listOf("first replacement"))
+
+            secondFuture =
+                CompletableFuture.runAsync({
+                    jdbc.dataSource!!.connection.use { connection ->
+                        connection.autoCommit = false
+                        connection.createStatement().use { it.execute("SET LOCAL ROLE ai_app") }
+                        secondBackendPid.set(
+                            connection.createStatement().use { statement ->
+                                statement.executeQuery("SELECT pg_backend_pid()").use { resultSet ->
+                                    resultSet.next()
+                                    resultSet.getInt(1)
+                                }
+                            },
+                        )
+                        secondStarted.countDown()
+                        replaceTopics(connection, versionId, listOf("second replacement"))
+                        connection.commit()
+                    }
+                }, executor)
+
+            assertTrue(secondStarted.await(5, TimeUnit.SECONDS))
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            var waitEventType: String? = null
+            while (System.nanoTime() < deadline && waitEventType != "Lock") {
+                waitEventType =
+                    jdbc
+                        .query(
+                            "SELECT wait_event_type FROM pg_stat_activity WHERE pid = ?",
+                            { rs, _ -> rs.getString(1) },
+                            secondBackendPid.get(),
+                        ).firstOrNull()
+                if (waitEventType != "Lock") Thread.sleep(10)
+            }
+            assertEquals("Lock", waitEventType)
+
+            firstConnection.commit()
+            secondFuture.get(10, TimeUnit.SECONDS)
+            assertEquals(
+                listOf("second replacement"),
+                jdbc.queryForList("SELECT topic FROM document_topics WHERE document_version_id = ?", String::class.java, versionId),
+            )
+        } finally {
+            runCatching { firstConnection.rollback() }
+            firstConnection.close()
+            executor.shutdownNow()
+            secondFuture?.cancel(true)
+        }
     }
 
     private fun topicLimitTestVersion(): UUID {
@@ -190,11 +308,8 @@ class GraphIntegrationTests : IntegrationTestBase() {
     @Test
     fun topicStorageRejectsMoreThanThreeTopics() {
         val versionId = topicLimitTestVersion()
-        listOf("topic-one", "topic-two", "topic-three").forEach { topic ->
-            jdbc.update("INSERT INTO document_topics (document_version_id, topic) VALUES (?, ?)", versionId, topic)
-        }
         assertThrows(DataIntegrityViolationException::class.java) {
-            jdbc.update("INSERT INTO document_topics (document_version_id, topic) VALUES (?, ?)", versionId, "topic-four")
+            replaceTopicsAsAi(versionId, listOf("topic-one", "topic-two", "topic-three", "topic-four"))
         }
     }
 
@@ -202,7 +317,7 @@ class GraphIntegrationTests : IntegrationTestBase() {
     fun topicStorageRejectsOverlongValues() {
         val versionId = topicLimitTestVersion()
         assertThrows(DataIntegrityViolationException::class.java) {
-            jdbc.update("INSERT INTO document_topics (document_version_id, topic) VALUES (?, ?)", versionId, "x".repeat(101))
+            replaceTopicsAsAi(versionId, listOf("x".repeat(101)))
         }
     }
 
