@@ -87,6 +87,7 @@ class DocumentService(
         author: String? = null,
         authoredAt: LocalDate? = null,
         sourceModifiedAt: Instant? = null,
+        displayTitle: String? = null,
     ): UploadResult {
         val normalized = path.replace('\\', '/').trim('/')
         val parts = normalized.split('/')
@@ -100,12 +101,15 @@ class DocumentService(
         if (extension !in allowed) return UploadResult(path, null, null, "EXCLUDED", "허용되지 않는 확장자")
         val source = repository.source(sourceId) ?: throw ApiException(ErrorCode.NOT_FOUND)
         if (source.kind == SourceKind.NOTION) throw ApiException(ErrorCode.INVALID_INPUT)
+        val title =
+            displayTitle?.trim()?.takeIf(String::isNotEmpty)
+                ?: normalized.substringAfterLast('/').substringBeforeLast('.')
         val bytes = file.bytes
         return upsertDocument(
             principal = principal,
             sourceId = sourceId,
             externalId = normalized,
-            title = normalized.substringAfterLast('/').substringBeforeLast('.'),
+            title = title,
             displayPath = normalized,
             extension = extension,
             bytes = bytes,

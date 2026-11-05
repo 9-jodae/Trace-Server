@@ -89,6 +89,7 @@ class AdminDocumentController(
         @PathVariable sourceId: UUID,
         @RequestPart files: List<MultipartFile>,
         @RequestParam paths: List<String>,
+        @RequestParam(required = false) titles: List<String>?,
         @RequestParam(required = false) clearance: Clearance?,
         @RequestParam(required = false) departmentIds: Set<UUID>?,
         @RequestParam(required = false) minimumPosition: Position?,
@@ -98,6 +99,9 @@ class AdminDocumentController(
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) sourceModifiedAt: Instant?,
     ): ApiResponse<List<UploadResult>> {
         if (files.size != paths.size) throw ApiException(ErrorCode.INVALID_INPUT, "파일과 상대 경로의 개수가 다릅니다")
+        if (titles != null && (titles.size != files.size || titles.any(String::isBlank))) {
+            throw ApiException(ErrorCode.INVALID_INPUT, "표시 제목은 파일과 같은 개수로 입력하고 비워 둘 수 없습니다")
+        }
         return ApiResponse.ok(
             files.indices.map {
                 service.uploadOne(
@@ -112,6 +116,7 @@ class AdminDocumentController(
                     author,
                     authoredAt,
                     sourceModifiedAt,
+                    titles?.get(it),
                 )
             },
         )
