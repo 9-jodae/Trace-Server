@@ -1,0 +1,71 @@
+spring:
+  application.name: docs199
+  profiles.default: local
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/docs199}
+    username: ${DB_USER:docs199}
+    password: ${DB_PASSWORD:local-only}
+  jpa:
+    hibernate.ddl-auto: validate
+    open-in-view: false
+  servlet.multipart.max-file-size: ${MAX_UPLOAD_SIZE:20MB}
+  servlet.multipart.max-request-size: ${MAX_UPLOAD_SIZE:20MB}
+management.endpoints.web.exposure.include: health,info
+management.endpoint.health.show-details: never
+logging.pattern.level: "%5p [requestId=%X{requestId:-}]"
+springdoc.api-docs.enabled: false
+springdoc.swagger-ui.enabled: false
+app:
+  demo-seed: true
+  demo-password: ${DEMO_PASSWORD:local-demo-1234}
+  internal-secret: ${INTERNAL_SECRET:local-internal-secret-change-before-production}
+  documents:
+    allowed-extensions: ${ALLOWED_EXTENSIONS:pdf,md}
+  jwt-secret: ${JWT_SECRET:local-development-secret-change-before-production-123456}
+  cors-origins: ${CORS_ORIGINS:http://localhost:3000}
+  storage:
+    type: minio
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:localminio}
+    secret-key: ${MINIO_SECRET_KEY:localminio123}
+    bucket: ${MINIO_BUCKET:documents}
+    s3:
+      bucket: ${S3_BUCKET:}
+      prefix: ${S3_PREFIX:uploads/}
+  ai:
+    mode: ${AI_MODE:mock}
+    base-url: ${AI_BASE_URL:http://localhost:8000}
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
+    retry-count: ${AI_RETRY_COUNT:0}
+    chat-timeout-seconds: ${AI_CHAT_TIMEOUT_SECONDS:70}
+---
+spring.config.activate.on-profile: local
+springdoc.api-docs.enabled: true
+springdoc.swagger-ui.enabled: true
+app.storage.type: minio
+---
+spring.config.activate.on-profile: prod
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa.hibernate.ddl-auto: validate
+app:
+  demo-seed: ${DEMO_SEED:false}
+  demo-password: ${DEMO_PASSWORD}
+  internal-secret: ${INTERNAL_SECRET}
+  jwt-secret: ${JWT_SECRET}
+  cors-origins: ${CORS_ORIGINS}
+  storage:
+    type: ${STORAGE_TYPE:s3}
+    s3:
+      bucket: ${S3_BUCKET}
+      prefix: ${S3_PREFIX:uploads/}
+  ai:
+    mode: ${AI_MODE:mock}
+    base-url: ${AI_BASE_URL:http://ai:8000}
+---
+spring.config.activate.on-profile: test
+app.ai.mode: mock
+app.storage.type: minio

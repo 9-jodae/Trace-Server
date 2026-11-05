@@ -1,0 +1,10 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE app_users (
+    id UUID PRIMARY KEY,
+    role VARCHAR(50) NOT NULL,
+    department VARCHAR(100) NOT NULL,
+    position VARCHAR(100) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

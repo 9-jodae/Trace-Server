@@ -1,0 +1,506 @@
+{
+  "company": "모아온",
+  "schemaVersion": 1,
+  "notes": "sourceKind는 의도한 출처이며 현재 API의 생성 kind와 다를 수 있다.",
+  "documents": [
+    {
+      "id": "leave-policy",
+      "logicalId": "leave-policy",
+      "title": "취업규칙",
+      "file": "demo/documents/local/공통/규정/leave-policy.md",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "공통/규정/leave-policy.md",
+      "obsidianRelativePath": null,
+      "clearance": "PUBLIC",
+      "readDepartments": [],
+      "minimumPosition": null,
+      "ownerDepartment": "인사팀",
+      "author": "정서윤",
+      "authoredAt": "2026-03-01",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "ETC",
+      "references": [
+        "leave-operation",
+        "onboarding-note"
+      ],
+      "conflicts": [
+        {
+          "document": "leave-operation",
+          "item": "연차 이월 가능 일수",
+          "thisValue": "5일",
+          "otherValue": "7일"
+        }
+      ]
+    },
+    {
+      "id": "leave-operation",
+      "logicalId": "leave-operation",
+      "title": "연차 운영 지침",
+      "file": "demo/documents/local/인사/지침/leave-operation.md",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "인사/지침/leave-operation.md",
+      "obsidianRelativePath": null,
+      "clearance": "INTERNAL",
+      "readDepartments": [
+        "인사팀"
+      ],
+      "minimumPosition": null,
+      "ownerDepartment": "인사팀",
+      "author": "최하린",
+      "authoredAt": "2026-04-15",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "ETC",
+      "references": [
+        "leave-policy"
+      ],
+      "conflicts": [
+        {
+          "document": "leave-policy",
+          "item": "연차 이월 가능 일수",
+          "thisValue": "7일",
+          "otherValue": "5일"
+        }
+      ]
+    },
+    {
+      "id": "travel-v1",
+      "logicalId": "travel-policy",
+      "title": "출장비 규정",
+      "file": "demo/documents/local/공통/규정/travel-v1.pdf",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "공통/규정/travel-policy.pdf",
+      "obsidianRelativePath": null,
+      "clearance": "PUBLIC",
+      "readDepartments": [],
+      "minimumPosition": null,
+      "ownerDepartment": "경영지원팀",
+      "author": "김도윤",
+      "authoredAt": "2026-01-10",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "ETC",
+      "references": [
+        "expense-approval"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "travel-v2",
+      "logicalId": "travel-policy",
+      "title": "출장비 규정",
+      "file": "demo/documents/local/공통/규정/travel-v2.pdf",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "공통/규정/travel-policy.pdf",
+      "obsidianRelativePath": null,
+      "clearance": "PUBLIC",
+      "readDepartments": [],
+      "minimumPosition": null,
+      "ownerDepartment": "경영지원팀",
+      "author": "김도윤",
+      "authoredAt": "2026-05-02",
+      "version": 2,
+      "revisionOf": "travel-v1",
+      "documentType": "ETC",
+      "references": [
+        "expense-approval"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "expense-approval",
+      "logicalId": "expense-approval",
+      "title": "경비 결재 절차",
+      "file": "demo/documents/local/경영지원/결재/expense-approval.pdf",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "경영지원/결재/expense-approval.pdf",
+      "obsidianRelativePath": null,
+      "clearance": "INTERNAL",
+      "readDepartments": [
+        "경영지원팀"
+      ],
+      "minimumPosition": null,
+      "ownerDepartment": "경영지원팀",
+      "author": "박유진",
+      "authoredAt": "2026-03-12",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "APPROVAL",
+      "references": [
+        "travel-v2"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "security-handbook",
+      "logicalId": "security-handbook",
+      "title": "정보보안 기본 수칙",
+      "file": "demo/documents/local/공통/매뉴얼/security-handbook.md",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "공통/매뉴얼/security-handbook.md",
+      "obsidianRelativePath": null,
+      "clearance": "PUBLIC",
+      "readDepartments": [],
+      "minimumPosition": null,
+      "ownerDepartment": "개발팀",
+      "author": "이수민",
+      "authoredAt": "2026-02-20",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "ETC",
+      "references": [
+        "incident-runbook"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "incident-runbook",
+      "logicalId": "incident-runbook",
+      "title": "보안 사고 대응 절차",
+      "file": "demo/documents/local/개발/운영/incident-runbook.md",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "개발/운영/incident-runbook.md",
+      "obsidianRelativePath": null,
+      "clearance": "INTERNAL",
+      "readDepartments": [
+        "개발팀"
+      ],
+      "minimumPosition": null,
+      "ownerDepartment": "개발팀",
+      "author": "한지후",
+      "authoredAt": "2026-06-03",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "ETC",
+      "references": [
+        "security-handbook",
+        "dev-handover"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "dev-handover",
+      "logicalId": "dev-handover",
+      "title": "개발 운영 인수인계",
+      "file": "demo/documents/local/개발/인수인계/dev-handover.md",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "개발/인수인계/dev-handover.md",
+      "obsidianRelativePath": null,
+      "clearance": "INTERNAL",
+      "readDepartments": [
+        "개발팀"
+      ],
+      "minimumPosition": null,
+      "ownerDepartment": "개발팀",
+      "author": "오민재",
+      "authoredAt": "2026-06-20",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "HANDOVER",
+      "references": [
+        "incident-runbook",
+        "release-report"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "release-report",
+      "logicalId": "release-report",
+      "title": "2분기 배포 안정성 보고서",
+      "file": "demo/documents/local/개발/보고/release-report.pdf",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "개발/보고/release-report.pdf",
+      "obsidianRelativePath": null,
+      "clearance": "INTERNAL",
+      "readDepartments": [
+        "개발팀"
+      ],
+      "minimumPosition": null,
+      "ownerDepartment": "개발팀",
+      "author": "오민재",
+      "authoredAt": "2026-07-02",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "REPORT",
+      "references": [
+        "dev-handover"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "sales-guide",
+      "logicalId": "sales-guide",
+      "title": "고객 할인 안내",
+      "file": "demo/documents/local/영업/매뉴얼/sales-guide.md",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "영업/매뉴얼/sales-guide.md",
+      "obsidianRelativePath": null,
+      "clearance": "PUBLIC",
+      "readDepartments": [],
+      "minimumPosition": null,
+      "ownerDepartment": "영업팀",
+      "author": "윤세아",
+      "authoredAt": "2026-02-01",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "ETC",
+      "references": [
+        "discount-exception",
+        "sales-handover"
+      ],
+      "conflicts": [
+        {
+          "document": "discount-exception",
+          "item": "추가 할인 상한",
+          "thisValue": "5%",
+          "otherValue": "12%"
+        }
+      ]
+    },
+    {
+      "id": "discount-exception",
+      "logicalId": "discount-exception",
+      "title": "전략 고객 할인 승인 기준",
+      "file": "demo/documents/local/영업/기밀/discount-exception.pdf",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "영업/기밀/discount-exception.pdf",
+      "obsidianRelativePath": null,
+      "clearance": "CONFIDENTIAL",
+      "readDepartments": [
+        "영업팀"
+      ],
+      "minimumPosition": "MANAGER",
+      "ownerDepartment": "영업팀",
+      "author": "남지훈",
+      "authoredAt": "2026-04-08",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "APPROVAL",
+      "references": [
+        "sales-guide"
+      ],
+      "conflicts": [
+        {
+          "document": "sales-guide",
+          "item": "추가 할인 상한",
+          "thisValue": "12%",
+          "otherValue": "5%"
+        }
+      ]
+    },
+    {
+      "id": "sales-handover",
+      "logicalId": "sales-handover",
+      "title": "영업 고객 인수인계",
+      "file": "demo/documents/local/영업/인수인계/sales-handover.pdf",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "영업/인수인계/sales-handover.pdf",
+      "obsidianRelativePath": null,
+      "clearance": "INTERNAL",
+      "readDepartments": [
+        "영업팀"
+      ],
+      "minimumPosition": null,
+      "ownerDepartment": "영업팀",
+      "author": "윤세아",
+      "authoredAt": "2026-05-12",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "HANDOVER",
+      "references": [
+        "sales-guide",
+        "contract-report"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "contract-report",
+      "logicalId": "contract-report",
+      "title": "상반기 계약 현황 보고서",
+      "file": "demo/documents/local/영업/보고/contract-report.pdf",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "영업/보고/contract-report.pdf",
+      "obsidianRelativePath": null,
+      "clearance": "INTERNAL",
+      "readDepartments": [
+        "영업팀"
+      ],
+      "minimumPosition": null,
+      "ownerDepartment": "영업팀",
+      "author": "남지훈",
+      "authoredAt": "2026-07-05",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "REPORT",
+      "references": [
+        "sales-handover"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "operations-plan",
+      "logicalId": "operations-plan",
+      "title": "사무실 이전 실행 계획",
+      "file": "demo/documents/local/경영지원/계획/operations-plan.md",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "경영지원/계획/operations-plan.md",
+      "obsidianRelativePath": null,
+      "clearance": "INTERNAL",
+      "readDepartments": [
+        "경영지원팀"
+      ],
+      "minimumPosition": null,
+      "ownerDepartment": "경영지원팀",
+      "author": "박유진",
+      "authoredAt": "2026-08-01",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "ETC",
+      "references": [
+        "expense-approval"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "discipline-policy",
+      "logicalId": "discipline-policy",
+      "title": "징계 심의 운영 규정",
+      "file": "demo/documents/local/인사/기밀/discipline-policy.pdf",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "인사/기밀/discipline-policy.pdf",
+      "obsidianRelativePath": null,
+      "clearance": "CONFIDENTIAL",
+      "readDepartments": [
+        "인사팀"
+      ],
+      "minimumPosition": "MANAGER",
+      "ownerDepartment": "인사팀",
+      "author": "최하린",
+      "authoredAt": "2026-03-30",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "ETC",
+      "references": [
+        "leave-policy"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "hiring-presentation",
+      "logicalId": "hiring-presentation",
+      "title": "하반기 채용 계획 발표",
+      "file": "demo/documents/local/인사/발표/hiring-presentation.pdf",
+      "sourceKind": "LOCAL",
+      "sourceName": "모아온 local 자료실",
+      "sourceRelativePath": "인사/발표/hiring-presentation.pdf",
+      "obsidianRelativePath": null,
+      "clearance": "INTERNAL",
+      "readDepartments": [
+        "인사팀",
+        "경영지원팀"
+      ],
+      "minimumPosition": null,
+      "ownerDepartment": "인사팀",
+      "author": "정서윤",
+      "authoredAt": "2026-07-10",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "PRESENTATION",
+      "references": [
+        "leave-policy"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "knowledge-map",
+      "logicalId": "knowledge-map",
+      "title": "문서 지식 지도",
+      "file": "demo/documents/obsidian/프로젝트/검색/문서 지식 지도.md",
+      "sourceKind": "OBSIDIAN",
+      "sourceName": "모아온 obsidian 자료실",
+      "sourceRelativePath": "프로젝트/검색/문서 지식 지도.md",
+      "obsidianRelativePath": "프로젝트/검색/문서 지식 지도.md",
+      "clearance": "PUBLIC",
+      "readDepartments": [],
+      "minimumPosition": null,
+      "ownerDepartment": "개발팀",
+      "author": "한지후",
+      "authoredAt": "2026-07-18",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "ETC",
+      "references": [
+        "onboarding-note",
+        "escalation-note",
+        "security-handbook"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "onboarding-note",
+      "logicalId": "onboarding-note",
+      "title": "신규 직원 안내",
+      "file": "demo/documents/obsidian/프로젝트/검색/신규 직원 안내.md",
+      "sourceKind": "OBSIDIAN",
+      "sourceName": "모아온 obsidian 자료실",
+      "sourceRelativePath": "프로젝트/검색/신규 직원 안내.md",
+      "obsidianRelativePath": "프로젝트/검색/신규 직원 안내.md",
+      "clearance": "PUBLIC",
+      "readDepartments": [],
+      "minimumPosition": null,
+      "ownerDepartment": "인사팀",
+      "author": "정서윤",
+      "authoredAt": "2026-07-20",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "ETC",
+      "references": [
+        "knowledge-map",
+        "leave-policy"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "escalation-note",
+      "logicalId": "escalation-note",
+      "title": "장애 연락 흐름",
+      "file": "demo/documents/obsidian/프로젝트/검색/장애 연락 흐름.md",
+      "sourceKind": "OBSIDIAN",
+      "sourceName": "모아온 obsidian 자료실",
+      "sourceRelativePath": "프로젝트/검색/장애 연락 흐름.md",
+      "obsidianRelativePath": "프로젝트/검색/장애 연락 흐름.md",
+      "clearance": "INTERNAL",
+      "readDepartments": [
+        "개발팀"
+      ],
+      "minimumPosition": null,
+      "ownerDepartment": "개발팀",
+      "author": "한지후",
+      "authoredAt": "2026-07-22",
+      "version": 1,
+      "revisionOf": null,
+      "documentType": "ETC",
+      "references": [
+        "knowledge-map",
+        "incident-runbook"
+      ],
+      "conflicts": []
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg18
+    environment:
+      POSTGRES_DB: docs199
+      POSTGRES_USER: docs199
+      POSTGRES_PASSWORD: local-only
+    ports: ["5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docs199 -d docs199"]
+      interval: 5s
+      retries: 10
+  minio:
+    build:
+      context: .
+      dockerfile: infra/minio/Dockerfile
+    image: docs199/minio-local:RELEASE.2025-09-07T16-13-09Z
+    pull_policy: build
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: localminio
+      MINIO_ROOT_PASSWORD: localminio123
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["minio-data:/data"]
+  neo4j:
+    image: neo4j:2026.10.1-community
+    environment:
+      NEO4J_AUTH: neo4j/local-only
+      NEO4J_server_memory_heap_max__size: 1G
+      NEO4J_server_memory_pagecache_size: 512M
+    ports: ["7474:7474", "7687:7687"]
+    volumes: ["neo4j-data:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u neo4j -p local-only 'RETURN 1' || exit 1"]
+      interval: 10s
+      retries: 10
+      start_period: 30s
+  # AI server: add a service here once its contract and deployment are agreed. Spring does not connect to Neo4j directly.
+volumes:
+  postgres-data:
+  minio-data:
+  neo4j-data:
