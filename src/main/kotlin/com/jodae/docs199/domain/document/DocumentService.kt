@@ -121,6 +121,7 @@ class DocumentService(
             author = author,
             authoredAt = authoredAt,
             sourceModifiedAt = sourceModifiedAt,
+            metadataTitle = displayTitle?.trim()?.takeIf(String::isNotEmpty),
         )
     }
 
@@ -145,6 +146,7 @@ class DocumentService(
         author: String? = null,
         authoredAt: LocalDate? = null,
         sourceModifiedAt: Instant? = null,
+        metadataTitle: String? = null,
     ): UploadResult {
         val source = repository.source(sourceId) ?: throw ApiException(ErrorCode.NOT_FOUND)
         repository.lockSource(sourceId)
@@ -152,6 +154,9 @@ class DocumentService(
         val previous = repository.documentByExternalId(sourceId, externalId)
         val latest = previous?.let { repository.currentVersion(it.id) }
         if (latest?.contentHash == hash && previous.deletedAt == null) {
+            if (author != null || authoredAt != null || sourceModifiedAt != null || metadataTitle != null) {
+                repository.updateMetadata(previous.id, author, authoredAt, sourceModifiedAt, metadataTitle)
+            }
             return UploadResult(displayPath, previous.id, latest.versionNumber, "UNCHANGED")
         }
         val documentId = previous?.id ?: UUID.randomUUID()

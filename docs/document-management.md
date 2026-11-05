@@ -2,6 +2,8 @@
 
 업로드 API는 선택 입력 `titles`를 `files`/`paths`와 같은 순서로 반복해 받을 수 있습니다. 제목을 보내면 파일 수와 개수가 같아야 하며 빈 제목은 허용하지 않습니다. 생략하면 상대 경로의 파일명을 표시 제목으로 사용합니다.
 
+**가정:** 파일 내용의 SHA-256이 현재 버전과 같으면 업로드로 명시한 `author`, `authoredAt`, `sourceModifiedAt`, `titles`만 문서 메타데이터에 반영합니다. 입력하지 않은 값은 기존 값을 유지합니다. 이 경우 새 버전이나 AI 처리 작업은 만들지 않습니다. 권한 등 나머지 문서 속성은 변경하지 않습니다.
+
 관리 API는 `DOC_ADMIN` 또는 `SYSTEM_ADMIN` 토큰으로 `/api/admin` 아래에서 사용합니다. 소스 종류(`SourceKind`)는 `LOCAL`, `OBSIDIAN`, `NOTION`입니다. 소스 생성은 `POST /api/admin/sources`, 목록은 `GET /api/admin/sources`입니다. `LOCAL`과 `OBSIDIAN`은 생성할 수 있고, `NOTION`은 enum만 있고 생성은 거부합니다(연동은 별도 Issue). 과거 `UPLOAD` 값으로 적재된 소스는 마이그레이션(`V5__source_kind_split.sql`)으로 모두 `LOCAL`로 변환했습니다.
 
 여러 파일 업로드는 `POST /api/admin/sources/{sourceId}/documents`에 multipart `files`와 같은 순서의 `paths`를 반복해 보냅니다. `paths`는 소스 내부 상대 경로입니다. `clearance`, `departmentIds`, `minimumPosition`, `ownerDepartmentId`(소유 부서)를 선택적으로 지정합니다. `ownerDepartmentId`를 지정하지 않으면 소스의 기본 부서(`defaultDepartmentId`)를 사용하며, 둘 다 없으면 소유 부서 없이 생성됩니다. 소유 부서는 열람 권한(`clearance`/`departmentIds`/`minimumPosition`)과 무관합니다. 자세한 내용은 [접근 권한 안내](access-control.md)를 참고하세요. 숨김 파일·폴더, `.obsidian/`, `.trash/`, 허용되지 않은 확장자는 `EXCLUDED`와 사유로 반환합니다. 허용 확장자는 `ALLOWED_EXTENSIONS` 환경 변수로 설정하며 기본값은 `pdf,md`입니다. 파일 하나는 기본 최대 20MB(`MAX_UPLOAD_FILE_SIZE`), 요청 전체는 multipart 오버헤드를 포함해 기본 최대 100MB(`MAX_UPLOAD_REQUEST_SIZE`)입니다. 두 한도는 별도로 설정할 수 있습니다. 기존 `MAX_UPLOAD_SIZE`는 새 변수가 없을 때 두 한도에 대한 하위 호환값으로 사용합니다. 클라이언트는 요청 전체 한도와 multipart 오버헤드를 고려해 파일을 나눠 보내야 합니다. 내용의 SHA-256이 현재 버전과 같으면 `UNCHANGED`, 다르면 새 버전을 만듭니다. 응답은 파일 순서에 맞춘 결과 목록입니다. 이 제외 규칙은 소스 종류(`LOCAL`/`OBSIDIAN`)에 관계없이 동일하게 적용됩니다.

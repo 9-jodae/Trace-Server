@@ -168,13 +168,15 @@ class DocumentRepository(
         author: String?,
         authoredAt: LocalDate?,
         sourceModifiedAt: Instant?,
+        title: String? = null,
     ) {
         jdbc.update(
             """UPDATE documents SET author = COALESCE(?, author), authored_at = COALESCE(?, authored_at),
-               source_modified_at = COALESCE(?, source_modified_at), updated_at = now() WHERE id = ?""",
+               source_modified_at = COALESCE(?, source_modified_at), title = COALESCE(?, title), updated_at = now() WHERE id = ?""",
             author,
             authoredAt,
             sourceModifiedAt?.let(Timestamp::from),
+            title,
             id,
         )
     }
