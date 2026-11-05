@@ -95,6 +95,58 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     }
 
     @Test
+    fun sourceIndependentIngestSeparatesExternalIdFromDisplayMetadata() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.OBSIDIAN, "external-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val first =
+            service.upsertDocument(
+                principal = admin,
+                sourceId = source.id,
+                externalId = "page-42",
+                title = "Handover guide",
+                displayPath = "Operations/Handover.md",
+                extension = "md",
+                bytes = "initial text".toByteArray(),
+                contentType = "text/markdown",
+            )
+        assertEquals("CREATED", first.outcome)
+        val documentId = first.documentId!!
+        assertEquals("page-42", repository.document(documentId)?.externalId)
+        assertEquals("Handover guide", repository.document(documentId)?.title)
+        assertEquals("Operations/Handover.md", repository.document(documentId)?.relativePath)
+
+        val revision =
+            service.upsertDocument(
+                principal = admin,
+                sourceId = source.id,
+                externalId = "page-42",
+                title = "Revised handover guide",
+                displayPath = "Operations/Handover guide.md",
+                extension = "md",
+                bytes = "revised text".toByteArray(),
+                contentType = "text/markdown",
+            )
+        assertEquals(documentId, revision.documentId)
+        assertEquals(2, revision.version)
+        assertEquals("Revised handover guide", repository.document(documentId)?.title)
+        assertEquals("Operations/Handover guide.md", repository.document(documentId)?.relativePath)
+
+        val differentExternalId =
+            service.upsertDocument(
+                principal = admin,
+                sourceId = source.id,
+                externalId = "page-43",
+                title = "Different document with same filename",
+                displayPath = "Operations/Handover guide.md",
+                extension = "md",
+                bytes = "initial text".toByteArray(),
+                contentType = "text/markdown",
+            )
+        assertEquals("CREATED", differentExternalId.outcome)
+        assertTrue(differentExternalId.documentId != documentId)
+    }
+
+    @Test
     fun employeeListRespectsAllConditions() {
         val admin = principal("doc.admin@local.docs199")
         val hr = principal("hr.staff@local.docs199")

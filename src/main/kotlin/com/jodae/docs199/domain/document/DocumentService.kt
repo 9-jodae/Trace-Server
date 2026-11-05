@@ -98,15 +98,55 @@ class DocumentService(
         }
         val extension = normalized.substringAfterLast('.', "").lowercase()
         if (extension !in allowed) return UploadResult(path, null, null, "EXCLUDED", "허용되지 않는 확장자")
-        val source = repository.source(sourceId) ?: throw ApiException(ErrorCode.NOT_FOUND)
-        if (source.kind == SourceKind.NOTION) throw ApiException(ErrorCode.INVALID_INPUT)
-        repository.lockSource(sourceId)
         val bytes = file.bytes
+        return upsertDocument(
+            principal = principal,
+            sourceId = sourceId,
+            externalId = normalized,
+            title = normalized.substringAfterLast('/').substringBeforeLast('.'),
+            displayPath = normalized,
+            extension = extension,
+            bytes = bytes,
+            contentType = file.contentType ?: "application/octet-stream",
+            clearance = clearance,
+            departments = departments,
+            minimumPosition = minimumPosition,
+            ownerDepartmentId = ownerDepartmentId,
+            author = author,
+            authoredAt = authoredAt,
+            sourceModifiedAt = sourceModifiedAt,
+        )
+    }
+
+    /**
+     * Creates or revises a document from source-independent content. HTTP multipart handling and
+     * source-specific path validation belong in the caller; external IDs are not display paths.
+     */
+    @Transactional
+    fun upsertDocument(
+        principal: UserPrincipal,
+        sourceId: UUID,
+        externalId: String,
+        title: String,
+        displayPath: String,
+        extension: String,
+        bytes: ByteArray,
+        contentType: String,
+        clearance: Clearance? = null,
+        departments: Set<UUID>? = null,
+        minimumPosition: Position? = null,
+        ownerDepartmentId: UUID? = null,
+        author: String? = null,
+        authoredAt: LocalDate? = null,
+        sourceModifiedAt: Instant? = null,
+    ): UploadResult {
+        val source = repository.source(sourceId) ?: throw ApiException(ErrorCode.NOT_FOUND)
+        repository.lockSource(sourceId)
         val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        val previous = repository.documentByPath(sourceId, normalized)
+        val previous = repository.documentByExternalId(sourceId, externalId)
         val latest = previous?.let { repository.currentVersion(it.id) }
         if (latest?.contentHash == hash && previous.deletedAt == null) {
-            return UploadResult(normalized, previous.id, latest.versionNumber, "UNCHANGED")
+            return UploadResult(displayPath, previous.id, latest.versionNumber, "UNCHANGED")
         }
         val documentId = previous?.id ?: UUID.randomUUID()
         val number = (previous?.currentVersion ?: 0) + 1
@@ -119,9 +159,9 @@ class DocumentService(
                 DocumentRecord(
                     documentId,
                     sourceId,
-                    normalized,
-                    parts.last().substringBeforeLast('.'),
-                    normalized,
+                    externalId,
+                    title,
+                    displayPath,
                     extension,
                     null,
                     author,
@@ -136,6 +176,7 @@ class DocumentService(
             )
             repository.setDepartments(documentId, effectiveDepartments)
         } else {
+            repository.updateDocumentDisplay(documentId, title, displayPath, extension)
             if (clearance != null || departments != null || minimumPosition != null) {
                 repository.updateAccess(documentId, clearance ?: previous.clearance, minimumPosition ?: previous.minimumPosition)
                 if (departments != null) repository.setDepartments(documentId, departments)
@@ -169,13 +210,13 @@ class DocumentService(
                 }
             },
         )
-        storage.upload(key, bytes.inputStream(), bytes.size.toLong(), file.contentType ?: "application/octet-stream")
+        storage.upload(key, bytes.inputStream(), bytes.size.toLong(), contentType)
         repository.addVersion(
             VersionRecord(versionId, documentId, number, key, bytes.size.toLong(), hash, principal.userId, Instant.now()),
         )
         repository.updateVersion(documentId, number)
         events.publishEvent(VersionCreated(versionId))
-        return UploadResult(normalized, documentId, number, "CREATED")
+        return UploadResult(displayPath, documentId, number, "CREATED")
     }
 
     fun list(

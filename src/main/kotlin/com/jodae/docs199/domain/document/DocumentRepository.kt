@@ -113,11 +113,11 @@ class DocumentRepository(
             .associateBy { it.id }
     }
 
-    fun documentByPath(
+    fun documentByExternalId(
         sourceId: UUID,
-        path: String,
+        externalId: String,
     ): DocumentRecord? =
-        jdbc.query("SELECT * FROM documents WHERE source_id = ? AND external_id = ?", ::mapDocument, sourceId, path).firstOrNull()
+        jdbc.query("SELECT * FROM documents WHERE source_id = ? AND external_id = ?", ::mapDocument, sourceId, externalId).firstOrNull()
 
     fun insertDocument(document: DocumentRecord) {
         jdbc.update(
@@ -138,6 +138,21 @@ class DocumentRepository(
             document.currentVersion,
             document.ownerDepartmentId,
             document.sourceModifiedAt?.let(Timestamp::from),
+        )
+    }
+
+    fun updateDocumentDisplay(
+        id: UUID,
+        title: String,
+        relativePath: String,
+        extension: String,
+    ) {
+        jdbc.update(
+            "UPDATE documents SET title = ?, relative_path = ?, extension = ?, updated_at = now() WHERE id = ?",
+            title,
+            relativePath,
+            extension,
+            id,
         )
     }
 
