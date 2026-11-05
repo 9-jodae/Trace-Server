@@ -1,14 +1,21 @@
 package com.jodae.docs199.domain.conversation
 
-import com.jodae.docs199.domain.document.DocumentRecord
-import com.jodae.docs199.domain.document.DocumentRepository
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.security.AccessPolicy
-import com.jodae.docs199.global.security.DocumentAccessRule
+import com.jodae.docs199.global.security.AccessScope
 import com.jodae.docs199.global.security.UserPrincipal
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.core.PreparedStatementSetter
+import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Service
+import java.sql.ResultSet
 import java.util.UUID
+
+private fun ResultSet.getNullableInt(column: String): Int? {
+    val value = getInt(column)
+    return if (wasNull()) null else value
+}
 
 data class EvidenceSourceView(
     val id: String,
@@ -16,7 +23,7 @@ data class EvidenceSourceView(
     val source: String,
     val documentId: UUID,
     val documentTitle: String,
-    val versionId: String?,
+    val versionId: UUID,
     val charStart: Int?,
     val charEnd: Int?,
 )
@@ -31,11 +38,21 @@ data class QuestionResponse(
     val fallbackReason: String?,
 )
 
+private data class VerifiedChunk(
+    val chunkId: UUID,
+    val content: String,
+    val charStart: Int?,
+    val charEnd: Int?,
+    val versionId: UUID,
+    val documentId: UUID,
+    val documentTitle: String,
+)
+
 @Service
 class QuestionService(
     private val conversations: ConversationService,
     private val conversationRepository: ConversationRepository,
-    private val documents: DocumentRepository,
+    private val jdbc: JdbcTemplate,
     private val policy: AccessPolicy,
     private val client: AgentChatClient,
 ) {
@@ -74,42 +91,66 @@ class QuestionService(
         )
     }
 
+    // AI 응답의 documentId/text는 네트워크 경계를 넘어온 값이라 신뢰하지 않는다. source.id(청크 ID)만
+    // 모아 DB의 실제 chunks·document_versions·documents 조합과 accessible_document_versions 권한
+    // 검사를 한 번의 배치 쿼리로 함께 확인하고, 본문·문서 정보는 전부 DB에서 다시 읽은 값으로 채운다.
     private fun visibleSources(
         principal: UserPrincipal,
         sources: List<AgentSource>,
     ): List<EvidenceSourceView> {
-        val byChunkAndDocument =
-            sources.mapNotNull { source ->
-                val chunkId = runCatching { UUID.fromString(source.id) }.getOrNull() ?: return@mapNotNull null
-                val documentId = source.documentId?.let { runCatching { UUID.fromString(it) }.getOrNull() } ?: return@mapNotNull null
-                Triple(source, chunkId, documentId)
-            }
-        val documentIds = byChunkAndDocument.map { it.third }.toSet()
-        val documentsById = documents.documents(documentIds)
-        val departmentsById = documents.departmentsBulk(documentIds)
-        return byChunkAndDocument.mapNotNull { (source, chunkId, documentId) ->
-            val document = documentsById[documentId] ?: return@mapNotNull null
-            val departments = departmentsById[documentId].orEmpty()
-            if (!policy.canAccess(principal, DocumentAccessRule(document.clearance, departments, document.minimumPosition))) {
-                return@mapNotNull null
-            }
-            toEvidenceView(source, chunkId, documentId, document)
+        val scope = policy.scope(principal)
+        val parsedIds = sources.map { runCatching { UUID.fromString(it.id) }.getOrNull() }
+        val verified = fetchVerifiedChunks(scope, parsedIds.filterNotNull().distinct())
+        return parsedIds.mapNotNull { chunkId ->
+            val chunk = chunkId?.let { verified[it] } ?: return@mapNotNull null
+            EvidenceSourceView(
+                chunk.chunkId.toString(),
+                chunk.content,
+                chunk.documentTitle,
+                chunk.documentId,
+                chunk.documentTitle,
+                chunk.versionId,
+                chunk.charStart,
+                chunk.charEnd,
+            )
         }
     }
 
-    private fun toEvidenceView(
-        source: AgentSource,
-        chunkId: UUID,
-        documentId: UUID,
-        document: DocumentRecord,
-    ) = EvidenceSourceView(
-        chunkId.toString(),
-        source.text,
-        source.source,
-        documentId,
-        document.title,
-        source.versionId,
-        source.charStart,
-        source.charEnd,
-    )
+    private fun fetchVerifiedChunks(
+        scope: AccessScope,
+        chunkIds: List<UUID>,
+    ): Map<UUID, VerifiedChunk> {
+        if (chunkIds.isEmpty()) return emptyMap()
+        val rows =
+            jdbc.query(
+                """
+                SELECT c.id AS chunk_id, c.content, c.char_start, c.char_end,
+                       dv.id AS version_id, d.id AS document_id, d.title
+                FROM chunks c
+                JOIN document_versions dv ON dv.id = c.document_version_id
+                JOIN documents d ON d.id = dv.document_id
+                JOIN accessible_document_versions(?, ?, ?, ?) av ON av.document_version_id = c.document_version_id
+                WHERE c.id = ANY(?)
+                """,
+                PreparedStatementSetter { ps ->
+                    ps.setObject(1, scope.departmentId)
+                    ps.setString(2, scope.position.name)
+                    ps.setString(3, scope.clearance.name)
+                    ps.setBoolean(4, scope.isAdmin)
+                    ps.setArray(5, ps.connection.createArrayOf("uuid", chunkIds.toTypedArray()))
+                },
+                RowMapper { rs, _ ->
+                    VerifiedChunk(
+                        rs.getObject("chunk_id", UUID::class.java),
+                        rs.getString("content"),
+                        rs.getNullableInt("char_start"),
+                        rs.getNullableInt("char_end"),
+                        rs.getObject("version_id", UUID::class.java),
+                        rs.getObject("document_id", UUID::class.java),
+                        rs.getString("title"),
+                    )
+                },
+            )
+        return rows.associateBy { it.chunkId }
+    }
 }
