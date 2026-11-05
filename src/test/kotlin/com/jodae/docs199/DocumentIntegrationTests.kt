@@ -79,6 +79,19 @@ class DocumentIntegrationTests : IntegrationTestBase() {
         val firstVersionId = repository.versions(documentId).first().id
         service.uploadOne(admin, source.id, "memo.md", file("current-version"), null, null, null)
 
+        val adminLogin = rest.postForEntity("/api/dev/token", null, String::class.java)
+        val adminToken = Regex("\"accessToken\":\"([^\"]+)\"").find(adminLogin.body!!)!!.groupValues[1]
+        val adminHeaders = HttpHeaders().apply { setBearerAuth(adminToken) }
+        val adminDownload =
+            rest.exchange(
+                "/api/admin/documents/$documentId/download",
+                HttpMethod.GET,
+                HttpEntity<Void>(adminHeaders),
+                ByteArray::class.java,
+            )
+        assertEquals(HttpStatus.OK, adminDownload.statusCode)
+        assertArrayEquals("current-version".toByteArray(), adminDownload.body)
+
         val login =
             rest.postForEntity(
                 "/api/auth/login",
