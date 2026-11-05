@@ -194,4 +194,4 @@ AI의 `documentId`, `versionId`, `source` 값은 신뢰하지 않습니다. `chu
 - 기본 리전은 `ap-northeast-1`이며 `BEDROCK_EMBEDDING_REGION`, `BEDROCK_EMBEDDING_MODEL_ID`로 조정할 수 있다. 자격 증명은 AWS 기본 체인에서만 찾는다. `local`, `test`는 결정적인 가짜 벡터를 사용한다.
 - 질문과 문서 임베딩은 같은 모델, 1024차원, `normalize=true`를 사용해야 검색 결과가 일치한다.
 
-가정: 외부 게이트웨이는 헬스체크만 공개하므로 노트북에서는 `ssh -L 18880:localhost:18080 t09`로 터널을 연 다음 `http://localhost:18880/api/internal/embeddings`를 호출한다. 접속 권한과 비밀 헤더는 팀장에게 개별로 받는다. 문서 일괄 적재는 팀 서버에서 직접 실행해 인스턴스 역할로 Bedrock을 호출하는 것을 권장한다.
+가정: 외부 게이트웨이는 `/api/internal/**`를 404로 막으므로(`docs/deployment.md`의 "외부 공개 범위" 참고) 노트북에서는 `ssh -L 18880:localhost:18080 t09`로 터널을 연 다음 `http://localhost:18880/api/internal/embeddings`를 호출한다. 접속 권한과 비밀 헤더는 팀장에게 개별로 받는다. 문서 일괄 적재는 팀 서버에서 직접 실행해 인스턴스 역할로 Bedrock을 호출하는 것을 권장한다.
