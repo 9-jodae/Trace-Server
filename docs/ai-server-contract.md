@@ -79,6 +79,22 @@ AI 서버는 `POST /api/internal/ingestion-jobs/{id}/result`에 같은 공유 �
 
 **AI 팀 확인 필요:** 질문 API가 이 네 값(`AccessScope`)을 요청에 실어 보내는 기능은 AI 서버가 받을 준비가 되면 추가합니다(지금은 문서화만, 코드는 아직 전달하지 않음).
 
+## 데모 일괄 적재(방법 1)
+
+현재 버전의 원문을 일회성 JSON으로 만들어 AI 팀에 전달합니다. 저장소 루트에서 Python 가상 환경에 `boto3`, `psycopg[binary]`, `pypdf`, `python-dotenv`를 설치한 뒤 실행합니다.
+
+```bash
+python3 -m venv .venv-export
+.venv-export/bin/python -m pip install boto3 'psycopg[binary]' pypdf python-dotenv
+.venv-export/bin/python scripts/export-documents-json.py ~/exports/demo-documents.json
+```
+
+DB 접속은 `DATABASE_URL` 또는 환경 변수·`.env`의 `DB_PASSWORD`, `DB_USER`, `DB_HOST`, `DB_PORT`, `DB_NAME`을 사용합니다. 기본값은 로컬 PostgreSQL의 `docs199` 사용자·DB입니다. S3는 `S3_BUCKET`, `S3_PREFIX`(기본 `uploads/`)와 AWS 기본 자격 증명 체인을 사용합니다. 출력은 원문을 포함하므로 접근을 제한하고 Git에 커밋하지 않습니다. 업로드·개정 후에는 다시 생성해야 합니다.
+
+출력은 `[{"doc_id":"문서 UUID","version_id":"현재 버전 UUID","title":"문서 제목","text":"추출 본문"}]` 배열입니다. 삭제된 문서와 구버전은 제외합니다. MD·TXT는 UTF-8을 그대로 읽고 PDF 페이지는 빈 줄로 구분합니다. 지원하지 않는 형식이나 빈 본문이 있으면 요약을 출력하고 실패합니다.
+
+`charStart`·`charEnd`는 이 JSON의 `text`에서 유니코드 문자(코드 포인트) 위치를 기준으로 합니다. 이번 데모 문서는 BMP 문자만 포함하므로 Java UTF-16 위치와 같습니다. BMP 밖 문자가 포함된 새 문서는 두 단위가 다를 수 있어 별도 변환이 필요합니다. 근거 조회 API는 청크 본문과 앞뒤 청크를 돌려주므로 시연 하이라이트는 청크 단위입니다.
+
 ## 남은 질문
 
 - JEV(TypeSafe `jev-latest`)로 질문·대화·청크 본문이 외부로 전송되는 점과 "외부로 데이터를 보내지 않는다"는 기획 전제의 충돌을 예외로 인정할지
