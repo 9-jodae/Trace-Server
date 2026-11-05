@@ -130,10 +130,20 @@ DB 접속은 `DATABASE_URL` 또는 환경 변수·`.env`의 `DB_PASSWORD`, `DB_U
 
 `charStart`·`charEnd`는 이 JSON의 `text`에서 유니코드 문자(코드 포인트) 위치를 기준으로 합니다. 이번 데모 문서는 BMP 문자만 포함하므로 Java UTF-16 위치와 같습니다. BMP 밖 문자가 포함된 새 문서는 두 단위가 다를 수 있어 별도 변환이 필요합니다. 근거 조회 API는 청크 본문과 앞뒤 청크를 돌려주므로 시연 하이라이트는 청크 단위입니다.
 
+## 답변 생성 모델 (현재 AI 구현 기준)
+
+AI 팀은 Bedrock의 Claude Sonnet 5.5를 답변 생성 모델로 사용한다고 확인했습니다([#14 댓글](https://github.com/9-jodae/docs199-Server/issues/14#issuecomment-6648484441)). AI 서버 설정은 다음과 같습니다.
+
+- 모델 ID: `global.anthropic.claude-sonnet-5-5`
+- `LLM_MODEL=bedrock:global.anthropic.claude-sonnet-5-5`
+- `BEDROCK_REGION=ap-northeast-1`
+- AI 팀은 출력 한도를 1024에서 2048 토큰으로 올렸다고 보고했습니다. 설정 변수명은 확인되지 않아 여기서는 지정하지 않습니다. 변경 후 재시험은 아직 완료되지 않았습니다.
+
+> **데이터 위치 확인 필요:** Bedrock의 `global.` 프로필은 요청을 도쿄 외부 리전에서 처리할 수 있습니다. 질문과 문서 본문이 해당 리전으로 전송될 수 있습니다. 또한 JEV(TypeSafe `jev-latest`)는 질문, 대화 이력, 검색된 청크 본문을 TypeSafe로 전송합니다. 두 경로가 "외부로 데이터를 보내지 않는다"는 기획 전제에서 허용되는지는 아직 결정되지 않았습니다. 배포·시연에 앞서 팀의 데이터 처리 정책 확인이 필요합니다.
+
 ## 남은 질문
 
 - JEV(TypeSafe `jev-latest`)로 질문·대화·청크 본문이 외부로 전송되는 점과 "외부로 데이터를 보내지 않는다"는 기획 전제의 충돌을 예외로 인정할지
-- 답변 생성 LLM의 Bedrock 모델 확정(Claude Haiku 4.5/Sonnet 등 팀 서버에서 키 없이 사용 가능)
 - PDF 페이지·`bbox` 제공 계획(파서 확정 이후)
 - `/ingest` 요청·콜백 초안(위 "처리 요청 초안") 수용 여부
 
