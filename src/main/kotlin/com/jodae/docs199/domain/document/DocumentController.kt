@@ -56,6 +56,12 @@ data class VersionView(
     val contentHash: String,
     val uploadedBy: UUID,
     val createdAt: Instant,
+    val extension: String?,
+)
+
+data class TextRevisionRequest(
+    val baseVersionId: UUID,
+    @field:NotBlank val text: String,
 )
 
 data class DetailView(
@@ -70,7 +76,7 @@ fun DocumentDetail.view() =
         document,
         departments,
         versions.map {
-            VersionView(it.id, it.versionNumber, it.fileSize, it.contentHash, it.uploadedBy, it.createdAt)
+            VersionView(it.id, it.versionNumber, it.fileSize, it.contentHash, it.uploadedBy, it.createdAt, it.extension)
         },
         job,
     )
@@ -176,24 +182,20 @@ class AdminDocumentController(
         @RequestParam(required = false) author: String?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) authoredAt: LocalDate?,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) sourceModifiedAt: Instant?,
-    ): ApiResponse<UploadResult> {
-        val document = service.detail(principal, id, true).document
-        return ApiResponse.ok(
-            service.uploadOne(
-                principal,
-                document.sourceId,
-                document.relativePath,
-                file,
-                null,
-                null,
-                null,
-                null,
-                author,
-                authoredAt,
-                sourceModifiedAt,
-            ),
-        )
-    }
+    ): ApiResponse<UploadResult> = ApiResponse.ok(service.reviseFile(principal, id, file, author, authoredAt, sourceModifiedAt))
+
+    @GetMapping("/documents/{id}/editable-text")
+    fun editableText(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable id: UUID,
+    ) = ApiResponse.ok(service.editableText(principal, id))
+
+    @PostMapping("/documents/{id}/text-revision")
+    fun reviseText(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable id: UUID,
+        @Valid @RequestBody request: TextRevisionRequest,
+    ) = ApiResponse.ok(service.reviseText(principal, id, request.baseVersionId, request.text))
 
     @DeleteMapping("/documents/{id}")
     fun delete(

@@ -56,6 +56,7 @@ data class VersionRecord(
     val contentHash: String,
     val uploadedBy: UUID,
     val createdAt: Instant,
+    val extension: String? = null,
 )
 
 data class JobRecord(
@@ -277,8 +278,9 @@ class DocumentRepository(
     }
 
     fun addVersion(version: VersionRecord) {
+        val extension = version.extension ?: document(version.documentId)?.extension ?: error("Version document missing")
         jdbc.update(
-            "INSERT INTO document_versions(id, document_id, version_number, storage_key, file_size, content_hash, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO document_versions(id, document_id, version_number, storage_key, file_size, content_hash, uploaded_by, extension) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             version.id,
             version.documentId,
             version.versionNumber,
@@ -286,6 +288,7 @@ class DocumentRepository(
             version.fileSize,
             version.contentHash,
             version.uploadedBy,
+            extension,
         )
     }
 
@@ -509,6 +512,7 @@ class DocumentRepository(
         rs.getString("content_hash"),
         rs.getObject("uploaded_by", UUID::class.java),
         rs.getTimestamp("created_at").toInstant(),
+        rs.getString("extension"),
     )
 
     private fun mapJob(

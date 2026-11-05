@@ -46,6 +46,15 @@ data class DocumentDownload(
     val contentType: String,
 )
 
+data class EditableTextView(
+    val documentId: UUID,
+    val versionId: UUID,
+    val version: Int,
+    val extension: String,
+    val text: String,
+    val saveExtension: String,
+)
+
 @Service
 class DocumentService(
     private val repository: DocumentRepository,
@@ -54,7 +63,7 @@ class DocumentService(
     private val departments: DepartmentRepository,
     private val events: ApplicationEventPublisher,
     private val cleanupQueue: StorageCleanupQueue,
-    @Value("\${app.documents.allowed-extensions:pdf,md}") allowedExtensions: String,
+    @Value("\${app.documents.allowed-extensions:pdf,md,txt}") allowedExtensions: String,
     @Value("\${app.documents.revision.enabled:true}") private val revisionEnabled: Boolean = true,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
@@ -155,12 +164,17 @@ class DocumentService(
         authoredAt: LocalDate? = null,
         sourceModifiedAt: Instant? = null,
         metadataTitle: String? = null,
+        expectedDocumentId: UUID? = null,
+        expectedVersionId: UUID? = null,
     ): UploadResult {
         val source = repository.source(sourceId) ?: throw ApiException(ErrorCode.NOT_FOUND)
         repository.lockSource(sourceId)
         val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
         val previous = repository.documentByExternalId(sourceId, externalId)
         val latest = previous?.let { repository.currentVersion(it.id) }
+        if (expectedDocumentId != null && (previous?.id != expectedDocumentId || latest?.id != expectedVersionId)) {
+            throw ApiException(ErrorCode.STALE_DOCUMENT_VERSION)
+        }
         if (latest?.contentHash == hash && previous.deletedAt == null) {
             if (author != null || authoredAt != null || sourceModifiedAt != null || metadataTitle != null) {
                 repository.updateMetadata(previous.id, author, authoredAt, sourceModifiedAt, metadataTitle)
@@ -232,7 +246,7 @@ class DocumentService(
         )
         storage.upload(key, bytes.inputStream(), bytes.size.toLong(), contentType)
         repository.addVersion(
-            VersionRecord(versionId, documentId, number, key, bytes.size.toLong(), hash, principal.userId, Instant.now()),
+            VersionRecord(versionId, documentId, number, key, bytes.size.toLong(), hash, principal.userId, Instant.now(), extension),
         )
         repository.updateVersion(documentId, number)
         events.publishEvent(VersionCreated(versionId))
@@ -320,7 +334,7 @@ class DocumentService(
             (if (versionId == null) detail.versions.firstOrNull() else detail.versions.firstOrNull { it.id == versionId })
                 ?: throw ApiException(ErrorCode.NOT_FOUND)
         val extension =
-            detail.document.extension
+            (version.extension ?: detail.document.extension)
                 .trim()
                 .lowercase()
                 .removePrefix(".")
@@ -331,6 +345,77 @@ class DocumentService(
             fileName,
             version.fileSize,
             contentType,
+        )
+    }
+
+    fun editableText(
+        principal: UserPrincipal,
+        id: UUID,
+    ): EditableTextView {
+        val detail = detail(principal, id, true)
+        val version = detail.versions.firstOrNull() ?: throw ApiException(ErrorCode.NOT_FOUND)
+        val extension = version.extension ?: detail.document.extension
+        val text = storage.download(version.storageKey).use { EditableDocumentText.extract(extension, it.readBytes()) }
+        return EditableTextView(id, version.id, version.versionNumber, extension, text, if (extension == "pdf") "md" else extension)
+    }
+
+    @Transactional
+    fun reviseFile(
+        principal: UserPrincipal,
+        id: UUID,
+        file: MultipartFile,
+        author: String?,
+        authoredAt: LocalDate?,
+        sourceModifiedAt: Instant?,
+    ): UploadResult {
+        val document = detail(principal, id, true).document
+        val extension =
+            file.originalFilename
+                ?.substringAfterLast('.', "")
+                ?.lowercase()
+                .orEmpty()
+                .ifBlank { document.extension }
+        if (extension !in allowed) throw ApiException(ErrorCode.INVALID_INPUT)
+        return upsertDocument(
+            principal = principal,
+            sourceId = document.sourceId,
+            externalId = document.externalId,
+            title = document.title,
+            displayPath = document.relativePath.substringBeforeLast('.') + ".$extension",
+            extension = extension,
+            bytes = file.bytes,
+            contentType = file.contentType ?: "application/octet-stream",
+            author = author,
+            authoredAt = authoredAt,
+            sourceModifiedAt = sourceModifiedAt,
+        )
+    }
+
+    @Transactional
+    fun reviseText(
+        principal: UserPrincipal,
+        id: UUID,
+        baseVersionId: UUID,
+        text: String,
+    ): UploadResult {
+        if (!revisionEnabled) throw ApiException(ErrorCode.REVISION_DISABLED)
+        if (text.isBlank() || text.length > 1_000_000) throw ApiException(ErrorCode.INVALID_INPUT)
+        val document = detail(principal, id, true).document
+        if (document.extension !in setOf("pdf", "md", "txt")) throw ApiException(ErrorCode.INVALID_INPUT)
+        val extension = if (document.extension == "pdf") "md" else document.extension
+        if (extension !in allowed) throw ApiException(ErrorCode.INVALID_INPUT)
+        val path = document.relativePath.substringBeforeLast('.') + ".$extension"
+        return upsertDocument(
+            principal = principal,
+            sourceId = document.sourceId,
+            externalId = document.externalId,
+            title = document.title,
+            displayPath = path,
+            extension = extension,
+            bytes = text.toByteArray(Charsets.UTF_8),
+            contentType = if (extension == "md") "text/markdown; charset=utf-8" else "text/plain; charset=utf-8",
+            expectedDocumentId = id,
+            expectedVersionId = baseVersionId,
         )
     }
 

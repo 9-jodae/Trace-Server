@@ -118,7 +118,7 @@ sourceModifiedAt=2026-03-01T00:00:00Z
 - `clearance`(`PUBLIC`/`INTERNAL`/`CONFIDENTIAL`), `departmentIds`(반복 가능, 비우면 전체 부서 열람 가능), `minimumPosition`(`STAFF`/`SENIOR`/`MANAGER`/`DIRECTOR`), `ownerDepartmentId`, `author`, `authoredAt`(`YYYY-MM-DD`), `sourceModifiedAt`(ISO 인스턴트, 예: `2026-03-01T00:00:00Z`)는 모두 선택 입력입니다.
 - 소스를 먼저 만들어야 합니다: `POST /api/admin/sources`(`{"kind": "LOCAL"|"OBSIDIAN", "name": "...", "defaultDepartmentId": null, "defaultClearance": "PUBLIC"}`), 목록은 `GET /api/admin/sources`. `NOTION`은 아직 생성할 수 없습니다.
 - 응답 `data`는 파일 순서에 맞춘 배열, 각 항목은 `{"path", "documentId", "version", "outcome", "reason"}`. `outcome`은 `CREATED`/`UPDATED`/`UNCHANGED`/`EXCLUDED`(사유는 `reason`)입니다.
-- 같은 상대 경로로 다시 올리면 새 버전(개정)이 됩니다. 전용 개정 엔드포인트도 있습니다: `POST /api/admin/documents/{id}/revisions`(`file` 하나, `author`/`authoredAt`/`sourceModifiedAt` 선택).
+- 같은 상대 경로로 다시 올리면 새 버전(개정)이 됩니다. 전용 개정 엔드포인트도 있습니다: `POST /api/admin/documents/{id}/revisions`(`file` 하나, `author`/`authoredAt`/`sourceModifiedAt` 선택). 본문 편집은 `GET /api/admin/documents/{id}/editable-text`로 텍스트와 기준 버전을 받고 `POST /api/admin/documents/{id}/text-revision`에 `baseVersionId`와 `text`를 보냅니다. PDF 편집 결과는 새 Markdown 버전이 됩니다. 자세한 내용은 [문서 본문 편집 안내](pdf-text-editing.md)를 참고하세요.
 - 의도한 문서 유형(`documentType`)과 표시 제목은 이 API로 입력할 수 없습니다. 유형은 AI 처리가 끝나야 채워지고, 제목은 파일명에서 그대로 파생됩니다.
 
 ### 프론트에서 자주 막히는 부분
@@ -151,7 +151,7 @@ Authorization: Bearer <token>
 
 | 조건 | 문서 목록 | 질문 `filters` | 허용 값 |
 | --- | --- | --- | --- |
-| 확장자 | `extension` | `extensions` | `ALLOWED_EXTENSIONS`의 소문자 값(기본 `pdf`, `md`) |
+| 확장자 | `extension` | `extensions` | `ALLOWED_EXTENSIONS`의 소문자 값(기본 `pdf`, `md`, `txt`) |
 | 문서 유형 | `documentType` | `documentTypes` | `HANDOVER`, `APPROVAL`, `REPORT`, `PRESENTATION`, `ETC` |
 | 소스 종류 | `sourceKind` | `sourceKinds` | `LOCAL`, `OBSIDIAN`, `NOTION` |
 | 작성 기간 | `authoredFrom`, `authoredTo` | `authoredFrom`, `authoredTo` | `YYYY-MM-DD`, 양 끝 포함 |

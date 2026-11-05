@@ -16,6 +16,10 @@ enum class ErrorCode(
         HttpStatus.CONFLICT,
         "\uBB38\uC11C \uAC1C\uC815 \uAE30\uB2A5\uC774 \uBE44\uD65C\uC131\uD654\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4",
     ),
+    STALE_DOCUMENT_VERSION(
+        HttpStatus.CONFLICT,
+        "\uAE30\uC900 \uBB38\uC11C \uBC84\uC804\uC774 \uD604\uC7AC \uBC84\uC804\uACFC \uB2E4\uB985\uB2C8\uB2E4",
+    ),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다"),
 }
 
