@@ -34,10 +34,43 @@ data class GraphDocumentTopicRow(
     val documentId: UUID,
 )
 
+data class VisibleConflictRow(
+    val relationId: UUID,
+    val documentId: UUID,
+    val otherDocumentId: UUID,
+    val item: String,
+)
+
 @Repository
 class GraphRepository(
     private val jdbc: JdbcTemplate,
 ) {
+    fun visibleConflicts(scope: AccessScope): List<VisibleConflictRow> =
+        jdbc.query(
+            """
+            SELECT r.id, r.source_document_id, r.target_document_id, r.detail->>'item' AS item
+            FROM document_relations r
+            JOIN documents source ON source.id = r.source_document_id AND source.deleted_at IS NULL
+            JOIN documents target ON target.id = r.target_document_id AND target.deleted_at IS NULL
+            JOIN document_versions source_version ON source_version.document_id = source.id AND source_version.version_number = source.current_version
+            JOIN document_versions target_version ON target_version.document_id = target.id AND target_version.version_number = target.current_version
+            JOIN accessible_document_versions(?, ?, ?, ?) source_access ON source_access.document_version_id = source_version.id
+            JOIN accessible_document_versions(?, ?, ?, ?) target_access ON target_access.document_version_id = target_version.id
+            WHERE r.relation_type = 'CONFLICTS'
+            ORDER BY r.created_at DESC, r.id DESC
+            LIMIT 20
+            """.trimIndent(),
+            { rs, _ ->
+                VisibleConflictRow(
+                    rs.getObject("id", UUID::class.java),
+                    rs.getObject("source_document_id", UUID::class.java),
+                    rs.getObject("target_document_id", UUID::class.java),
+                    rs.getString("item"),
+                )
+            },
+            *scopeParams(scope, repeat = 2),
+        )
+
     fun topicsForAccessibleCurrentDocuments(scope: AccessScope): List<GraphDocumentTopicRow> =
         jdbc.query(
             """

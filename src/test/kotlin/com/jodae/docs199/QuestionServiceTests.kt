@@ -9,6 +9,7 @@ import com.jodae.docs199.domain.conversation.AgentChatRequest
 import com.jodae.docs199.domain.conversation.AgentChatResponse
 import com.jodae.docs199.domain.conversation.AgentEvidence
 import com.jodae.docs199.domain.conversation.AgentKeyword
+import com.jodae.docs199.domain.conversation.AgentKnownConflict
 import com.jodae.docs199.domain.conversation.AgentSource
 import com.jodae.docs199.domain.conversation.AnswerType
 import com.jodae.docs199.domain.conversation.ConversationRepository
@@ -20,6 +21,7 @@ import com.jodae.docs199.domain.conversation.SearchFilters
 import com.jodae.docs199.domain.document.DocumentRepository
 import com.jodae.docs199.domain.document.DocumentService
 import com.jodae.docs199.domain.document.SourceKind
+import com.jodae.docs199.domain.graph.GraphRepository
 import com.jodae.docs199.domain.user.Clearance
 import com.jodae.docs199.domain.user.UserRepository
 import com.jodae.docs199.global.error.ApiException
@@ -71,6 +73,41 @@ class FakeAgentChatClient : AgentChatClient {
 }
 
 class AgentChatHttpTests {
+    @Test
+    fun serializesOnlyVisibleConflictMetadataAndKeepsResponseMapping() {
+        val received = AtomicReference<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/agent/chat") { exchange ->
+            received.set(exchange.requestBody.bufferedReader().readText())
+            val reply = """{"threadId":"thread","answer":"ok","answerType":"NO_EVIDENCE"}""".toByteArray()
+            exchange.responseHeaders.set("Content-Type", "application/json")
+            exchange.sendResponseHeaders(200, reply.size.toLong())
+            exchange.responseBody.use { it.write(reply) }
+        }
+        server.start()
+        try {
+            val client = HttpAgentChatClient("http://127.0.0.1:${server.address.port}", 5, "test-secret")
+            val conflict = AgentKnownConflict(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "검토 항목")
+            val response = client.chat(AgentChatRequest("question", "thread", knownConflicts = listOf(conflict)))
+            assertEquals("ok", response.answer)
+            assertEquals(AnswerType.NO_EVIDENCE, response.answerType)
+            assertTrue(received.get().contains("\"knownConflicts\":[{"))
+            assertTrue(received.get().contains("\"relationId\":\"${conflict.relationId}\""))
+            assertTrue(received.get().contains("\"documentId\":\"${conflict.documentId}\""))
+            assertTrue(received.get().contains("\"otherDocumentId\":\"${conflict.otherDocumentId}\""))
+            assertTrue(!received.get().contains("thisValue"))
+            assertTrue(!received.get().contains("otherValue"))
+            assertTrue(!received.get().contains("detail"))
+
+            client.chat(AgentChatRequest("question", "thread", knownConflicts = emptyList()))
+            assertTrue(received.get().contains("\"knownConflicts\":[]"))
+            client.chat(AgentChatRequest("question", "thread"))
+            assertTrue(!received.get().contains("\"knownConflicts\""))
+        } finally {
+            server.stop(0)
+        }
+    }
+
     @Test
     fun ignoresUnknownFieldsInFullAiResponseFixture() {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
@@ -306,6 +343,8 @@ class QuestionServiceTests : IntegrationTestBase() {
 
     @Autowired lateinit var jdbc: JdbcTemplate
 
+    @Autowired lateinit var graphRepository: GraphRepository
+
     private fun principal(email: String): UserPrincipal {
         val user = users.findByEmail(email)!!
         return UserPrincipal(user.id, user.role, user.department.id, user.position, user.clearance)
@@ -335,7 +374,7 @@ class QuestionServiceTests : IntegrationTestBase() {
     fun validFiltersAreForwardedAndOmittedFiltersRemainOptional() {
         val hr = principal("hr.staff@local.docs199")
         val client = FakeAgentChatClient()
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
         val filters =
             SearchFilters(listOf("pdf", "md"), listOf("REPORT"), listOf("LOCAL"), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31))
         service.ask(hr, null, "질문", filters)
@@ -348,7 +387,7 @@ class QuestionServiceTests : IntegrationTestBase() {
     fun accessScopeIsDerivedFromThePrincipalAndSentToTheAgent() {
         val hr = principal("hr.staff@local.docs199")
         val client = FakeAgentChatClient()
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
 
         service.ask(hr, null, "질문")
 
@@ -415,7 +454,7 @@ class QuestionServiceTests : IntegrationTestBase() {
                 AgentSource(hiddenChunkId.toString(), "본문2", "기밀 문서", hiddenId.toString()),
             )
         client.nextEvidence = listOf(AgentEvidence(evidenceChunkId.toString(), "source", quote = "이차 근거"))
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
 
         val response = service.ask(hr, null, "연차는 며칠까지 이월되나요?")
 
@@ -452,7 +491,7 @@ class QuestionServiceTests : IntegrationTestBase() {
         client.nextSources = listOf(AgentSource(chunkFromHiddenDocument.toString(), "공개인 척", "공개 문서", visibleId.toString()))
         client.nextAnswerType = AnswerType.CLARIFICATION
         client.nextAnswer = "기밀 내용을 바탕으로 한 되묻기"
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
 
         val response = service.ask(hr, null, "질문")
 
@@ -485,7 +524,7 @@ class QuestionServiceTests : IntegrationTestBase() {
                 AgentSource(firstChunkId.toString(), "", "", docId.toString()),
                 AgentSource(secondChunkId.toString(), "", "", docId.toString()),
             )
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
 
         val response = service.ask(hr, null, "질문")
 
@@ -554,7 +593,7 @@ class QuestionServiceTests : IntegrationTestBase() {
                     quote = quote,
                 ),
             )
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
 
         val response = service.ask(hr, null, "할인율은?")
 
@@ -592,7 +631,7 @@ class QuestionServiceTests : IntegrationTestBase() {
             listOf("A", "B", "C", "D").map { quote ->
                 AgentEvidence(chunkId.toString(), "임시 출처", quote = quote)
             }
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
 
         val response = service.ask(employee, null, "질문")
 
@@ -630,7 +669,7 @@ class QuestionServiceTests : IntegrationTestBase() {
                 AgentKeyword("최대 5일", visibleChunkId.toString()),
                 AgentKeyword("3월 31일", visibleChunkId.toString()),
             )
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
 
         val response = service.ask(employee, null, "연차 이월은?")
 
@@ -643,7 +682,7 @@ class QuestionServiceTests : IntegrationTestBase() {
         val hr = principal("hr.staff@local.docs199")
         val dev = principal("dev.manager@local.docs199")
         val client = FakeAgentChatClient()
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
         val conversation = conversations.create(hr, "인사팀 전용 대화")
 
         assertThrows(ApiException::class.java) { service.ask(dev, conversation.id, "다른 사람 대화에 질문") }
@@ -654,7 +693,7 @@ class QuestionServiceTests : IntegrationTestBase() {
         val hr = principal("hr.staff@local.docs199")
         val client = FakeAgentChatClient()
         client.failWith = ApiException(ErrorCode.AI_UNAVAILABLE)
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
 
         val error = assertThrows(ApiException::class.java) { service.ask(hr, null, "AI가 응답하지 않을 때 질문") }
         assertEquals(ErrorCode.AI_UNAVAILABLE, error.code)
@@ -678,7 +717,7 @@ class QuestionServiceTests : IntegrationTestBase() {
         val hr = principal("hr.staff@local.docs199")
         val client = FakeAgentChatClient()
         client.nextEvidence = listOf(AgentEvidence("not-a-uuid", "source", quote = "quote"))
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
 
         val error = assertThrows(ApiException::class.java) { service.ask(hr, null, "질문") }
         assertEquals(ErrorCode.AI_UNAVAILABLE, error.code)
@@ -693,7 +732,7 @@ class QuestionServiceTests : IntegrationTestBase() {
     fun askOnExistingConversationReusesThreadId() {
         val hr = principal("hr.staff@local.docs199")
         val client = FakeAgentChatClient()
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
         val conversation = conversations.create(hr, "기존 대화")
 
         service.ask(hr, conversation.id, "첫 질문")
@@ -705,7 +744,7 @@ class QuestionServiceTests : IntegrationTestBase() {
     fun defaultsEmptySourcesToNoEvidence() {
         val employee = principal("hr.staff@local.docs199")
         val client = FakeAgentChatClient()
-        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client, graphRepository)
 
         val response = service.ask(employee, null, "hello")
 

@@ -2,6 +2,7 @@ package com.jodae.docs199.domain.conversation
 
 import com.jodae.docs199.domain.document.DocumentType
 import com.jodae.docs199.domain.document.SourceKind
+import com.jodae.docs199.domain.graph.GraphRepository
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.security.AccessPolicy
@@ -78,6 +79,8 @@ class QuestionService(
     private val jdbc: JdbcTemplate,
     private val policy: AccessPolicy,
     private val client: AgentChatClient,
+    private val graphRepository: GraphRepository,
+    @Value("\${app.ai.known-conflicts-enabled:true}") private val knownConflictsEnabled: Boolean = true,
     @Value("\${app.documents.allowed-extensions:pdf,md}") allowedExtensions: String = "pdf,md",
 ) {
     private val allowedExtensions =
@@ -105,8 +108,16 @@ class QuestionService(
         conversations.addMessage(principal, conversation.id, MessageRole.USER, message)
         val scope = policy.scope(principal)
         val accessScope = AgentAccessScope(scope.departmentId, scope.position.name, scope.clearance.name, scope.isAdmin)
+        val knownConflicts =
+            if (knownConflictsEnabled) {
+                graphRepository.visibleConflicts(scope).map {
+                    AgentKnownConflict(it.relationId, it.documentId, it.otherDocumentId, it.item)
+                }
+            } else {
+                null
+            }
         // AI 호출은 DB 트랜잭션 밖에서 수행한다(최대 70초, 위 두 저장은 이미 각각 커밋됨).
-        val response = client.chat(AgentChatRequest(message, conversation.id.toString(), filters, accessScope))
+        val response = client.chat(AgentChatRequest(message, conversation.id.toString(), filters, accessScope, knownConflicts))
         if (response.sources.any { !it.id.isUuid() } || response.evidence.any { !it.chunkId.isUuid() }) {
             throw ApiException(ErrorCode.AI_UNAVAILABLE)
         }
