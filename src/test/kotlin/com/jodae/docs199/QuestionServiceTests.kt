@@ -128,6 +128,22 @@ class QuestionServiceTests : IntegrationTestBase() {
     }
 
     @Test
+    fun accessScopeIsDerivedFromThePrincipalAndSentToTheAgent() {
+        val hr = principal("hr.staff@local.docs199")
+        val client = FakeAgentChatClient()
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+
+        service.ask(hr, null, "질문")
+
+        val scope = policy.scope(hr)
+        val sent = client.lastRequest.accessScope!!
+        assertEquals(scope.departmentId, sent.departmentId)
+        assertEquals(scope.position.name, sent.position)
+        assertEquals(scope.clearance.name, sent.clearance)
+        assertEquals(scope.isAdmin, sent.isAdmin)
+    }
+
+    @Test
     fun invalidFilterValuesReturnBadRequestBeforeCreatingConversation() {
         val headers = HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON }
         val login =

@@ -31,13 +31,26 @@ AI 서버는 `POST /api/internal/ingestion-jobs/{id}/result`에 같은 공유 �
 `POST /api/conversations/messages`(새 대화)와 `POST /api/conversations/{id}/messages`(기존 대화)에서 Spring이 AI 서버의 `POST /api/v1/agent/chat`을 호출합니다. SSE가 아닌 단건 JSON입니다.
 
 - 인증: `X-Internal-Secret` 헤더(ingest 콜백과 같은 `INTERNAL_SECRET` 값)
-- 요청: `{"message": "...", "threadId": "대화ID 또는 null"}`. `threadId`는 Spring의 `conversations.id`를 그대로 씁니다. **Spring이 호출자가 그 대화의 소유자인지 먼저 확인한 뒤에만 넘기므로, AI 서버는 Spring이 보낸 `threadId`를 신뢰해도 됩니다.**
+- 요청: `{"message": "...", "threadId": "대화ID 또는 null", "filters": {...} | null, "accessScope": {"departmentId": "<uuid>", "position": "<직급>", "clearance": "<보안 등급>", "isAdmin": <bool>}}`. `threadId`는 Spring의 `conversations.id`를 그대로 씁니다. **Spring이 호출자가 그 대화의 소유자인지 먼저 확인한 뒤에만 넘기므로, AI 서버는 Spring이 보낸 `threadId`를 신뢰해도 됩니다.** `accessScope`는 호출한 사용자의 `AccessPolicy.scope(principal)` 결과(`department_id uuid, position text, clearance text, is_admin boolean`)를 그대로 담은 값으로, 아래 "청크·권한 보장 조회 함수" 절의 세 함수에 넘기는 네 인자와 이름·값이 같습니다.
 - 응답: `{"threadId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","versionId","charStart","charEnd"}], "failedSources": [...], "fallbackReason": null|"..."}`. `sources[].documentId`로 사용자가 접근할 수 없는 문서의 출처는 Spring이 응답에서 제외합니다(`AccessPolicy`). `sources[].id`(청크 ID, UUID)는 접근 가능한 것만 `conversation_messages.evidence_chunk_ids`에 저장합니다.
 - 오류: `{"code", "message"}`(`INVALID_REQUEST`/`AI_UNAVAILABLE`/`INTERNAL_ERROR`)를 Spring이 공통 오류 형식(`AI_UNAVAILABLE`, 502)으로 변환합니다.
 - 타임아웃: AI 서버 최대 처리 시간(~60초)보다 길게(기본 70초, `AI_CHAT_TIMEOUT_SECONDS`).
 - `AI_MODE=mock`에서는 고정 응답(`모의 응답입니다: <질문>`)을 반환합니다.
 
-**AI 팀 확인 필요:** 권한 범위(`AccessScope(departmentId, position, clearance, isAdmin)`)는 아직 AI 서버에 전달하지 않습니다. 지금은 Spring이 응답을 받은 뒤 출처만 걸러내므로, 검색 자체는 권한과 무관하게 전체 청크에서 이루어집니다. AI 서버가 검색 단계에서 권한 필터를 받는 기능을 구현하면 요청에 `AccessScope`를 추가합니다.
+### `accessScope` → `accessible_chunks` 매핑 예시
+
+AI 서버는 검색 단계에서 받은 `accessScope`를 아래처럼 그대로 넘겨 권한 범위를 좁힌 뒤 벡터 거리로 정렬합니다(아래 "청크·권한 보장 조회 함수" 절의 함수 1과 동일).
+
+```sql
+SELECT c.*, c.embedding <=> :query_embedding AS distance
+FROM accessible_chunks(:accessScope.departmentId, :accessScope.position, :accessScope.clearance, :accessScope.isAdmin) c
+ORDER BY distance
+LIMIT 10;
+```
+
+**경고:** AI 서버가 검색·답변 생성 단계에서 `accessScope`를 쓰지 않으면, 사용자가 접근할 수 없는 문서의 내용이 검색 결과·답변 생성 맥락에 섞여 들어갈 수 있습니다. Spring은 응답을 받은 뒤 `sources`만 `AccessPolicy`로 걸러내므로, 답변 문장 자체에 권한 밖 내용이 요약·인용되는 것은 막지 못합니다.
+
+**AI 팀 확인 필요:** Spring은 이제 요청에 `accessScope`를 함께 보냅니다(지금은 문서화뿐이 아니라 실제 전송). AI 서버가 검색 단계에서 이 값을 실제로 `accessible_chunks`/`filter_accessible_chunk_ids` 인자로 반영하는지는 AI 팀 확인이 필요합니다.
 
 ## 청크·권한 보장 조회 함수 (확정, #15·#19)
 
@@ -77,7 +90,7 @@ AI 서버는 `POST /api/internal/ingestion-jobs/{id}/result`에 같은 공유 �
 
 문서 단위로만 필요하면 `accessible_document_versions(:department_id, :position, :clearance, :is_admin)`로 현재 버전의 `document_version_id` 목록만 받을 수 있습니다. 세 함수 모두 삭제된 문서·이전 버전을 자동으로 제외합니다.
 
-**AI 팀 확인 필요:** 질문 API가 이 네 값(`AccessScope`)을 요청에 실어 보내는 기능은 AI 서버가 받을 준비가 되면 추가합니다(지금은 문서화만, 코드는 아직 전달하지 않음).
+질문 API는 이 네 값을 `accessScope`로 요청에 실어 보냅니다(위 "질문 API" 절 참고). AI 서버가 검색 단계에서 실제로 반영하는지는 AI 팀 확인이 필요합니다.
 
 ### 질문 검색 필터 (AI 팀 연동 필요)
 
