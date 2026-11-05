@@ -12,6 +12,10 @@ enum class ErrorCode(
     NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 리소스를 찾을 수 없습니다"),
     STORAGE_ERROR(HttpStatus.BAD_GATEWAY, "파일 저장소 작업에 실패했습니다"),
     AI_UNAVAILABLE(HttpStatus.BAD_GATEWAY, "AI 서버에 연결할 수 없습니다"),
+    REVISION_DISABLED(
+        HttpStatus.CONFLICT,
+        "\uBB38\uC11C \uAC1C\uC815 \uAE30\uB2A5\uC774 \uBE44\uD65C\uC131\uD654\uB418\uC5B4 \uC788\uC2B5\uB2C8\uB2E4",
+    ),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다"),
 }
 

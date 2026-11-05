@@ -1709,6 +1709,9 @@
           "sourceModifiedAt" : {
             "type" : [ "string", "null" ],
             "format" : "date-time"
+          },
+          "searchable" : {
+            "type" : "boolean"
           }
         }
       },
@@ -1737,6 +1740,9 @@
           "finishedAt" : {
             "type" : [ "string", "null" ],
             "format" : "date-time"
+          },
+          "searchable" : {
+            "type" : "boolean"
           }
         }
       },

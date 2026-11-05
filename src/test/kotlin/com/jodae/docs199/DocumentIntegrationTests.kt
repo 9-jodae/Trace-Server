@@ -33,6 +33,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
@@ -44,6 +45,8 @@ import java.util.UUID
 
 class DocumentIntegrationTests : IntegrationTestBase() {
     @Autowired lateinit var service: DocumentService
+
+    @Autowired lateinit var jdbc: JdbcTemplate
 
     @Autowired lateinit var repository: DocumentRepository
 
@@ -187,6 +190,44 @@ class DocumentIntegrationTests : IntegrationTestBase() {
         assertEquals("EXCLUDED", service.uploadOne(admin, source.id, "notes/a.exe", file("x"), null, null, null).outcome)
         service.delete(id)
         assertThrows(ApiException::class.java) { service.detail(admin, id, true) }
+    }
+
+    @Test
+    fun currentDocumentReportsSearchableOnlyWhenCurrentVersionHasChunks() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "searchable-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId = UUID.randomUUID()
+        val versionId = UUID.randomUUID()
+        repository.insertDocument(
+            DocumentRecord(
+                documentId,
+                source.id,
+                "searchable-${UUID.randomUUID()}",
+                "Searchable test",
+                "searchable.md",
+                "md",
+                null,
+                null,
+                null,
+                Clearance.PUBLIC,
+                null,
+                0,
+                null,
+            ),
+        )
+        repository.addVersion(
+            VersionRecord(versionId, documentId, 1, "test/$versionId", 1, "a".repeat(64), admin.userId, Instant.now()),
+        )
+        repository.updateVersion(documentId, 1)
+        assertFalse(service.detail(admin, documentId, true).document.searchable)
+
+        jdbc.update(
+            "INSERT INTO chunks(id, document_version_id, chunk_index, content) VALUES (?, ?, 0, ?)",
+            UUID.randomUUID(),
+            versionId,
+            "searchable test content",
+        )
+        assertTrue(service.detail(admin, documentId, true).document.searchable)
     }
 
     @Test

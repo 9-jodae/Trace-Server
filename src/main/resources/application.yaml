@@ -25,6 +25,8 @@ app:
     model-id: ${BEDROCK_EMBEDDING_MODEL_ID:amazon.titan-embed-text-v2:0}
   documents:
     allowed-extensions: ${ALLOWED_EXTENSIONS:pdf,md}
+    revision:
+      enabled: ${DOCUMENT_REVISION_ENABLED:true}
   jwt-secret: ${JWT_SECRET:local-development-secret-change-before-production-123456}
   cors-origins: ${CORS_ORIGINS:http://localhost:3000}
   storage:
