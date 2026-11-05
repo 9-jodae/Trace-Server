@@ -6,6 +6,8 @@ import com.jodae.docs199.global.security.AccessPolicy
 import com.jodae.docs199.global.security.AccessScope
 import com.jodae.docs199.global.security.UserPrincipal
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.core.PreparedStatementSetter
+import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Service
 import java.sql.ResultSet
 import java.util.UUID
@@ -90,16 +92,17 @@ class QuestionService(
     }
 
     // AI 응답의 documentId/text는 네트워크 경계를 넘어온 값이라 신뢰하지 않는다. source.id(청크 ID)만
-    // 받아 DB의 실제 chunks·document_versions·documents 조합과 accessible_document_versions 권한
-    // 검사를 한 쿼리로 함께 확인하고, 본문·문서 정보는 전부 DB에서 다시 읽은 값으로 채운다.
+    // 모아 DB의 실제 chunks·document_versions·documents 조합과 accessible_document_versions 권한
+    // 검사를 한 번의 배치 쿼리로 함께 확인하고, 본문·문서 정보는 전부 DB에서 다시 읽은 값으로 채운다.
     private fun visibleSources(
         principal: UserPrincipal,
         sources: List<AgentSource>,
     ): List<EvidenceSourceView> {
         val scope = policy.scope(principal)
-        return sources.mapNotNull { source ->
-            val chunkId = runCatching { UUID.fromString(source.id) }.getOrNull() ?: return@mapNotNull null
-            val chunk = fetchVerifiedChunk(scope, chunkId) ?: return@mapNotNull null
+        val parsedIds = sources.map { runCatching { UUID.fromString(it.id) }.getOrNull() }
+        val verified = fetchVerifiedChunks(scope, parsedIds.filterNotNull().distinct())
+        return parsedIds.mapNotNull { chunkId ->
+            val chunk = chunkId?.let { verified[it] } ?: return@mapNotNull null
             EvidenceSourceView(
                 chunk.chunkId.toString(),
                 chunk.content,
@@ -113,12 +116,13 @@ class QuestionService(
         }
     }
 
-    private fun fetchVerifiedChunk(
+    private fun fetchVerifiedChunks(
         scope: AccessScope,
-        chunkId: UUID,
-    ): VerifiedChunk? =
-        jdbc
-            .query(
+        chunkIds: List<UUID>,
+    ): Map<UUID, VerifiedChunk> {
+        if (chunkIds.isEmpty()) return emptyMap()
+        val rows =
+            jdbc.query(
                 """
                 SELECT c.id AS chunk_id, c.content, c.char_start, c.char_end,
                        dv.id AS version_id, d.id AS document_id, d.title
@@ -126,9 +130,16 @@ class QuestionService(
                 JOIN document_versions dv ON dv.id = c.document_version_id
                 JOIN documents d ON d.id = dv.document_id
                 JOIN accessible_document_versions(?, ?, ?, ?) av ON av.document_version_id = c.document_version_id
-                WHERE c.id = ?
+                WHERE c.id = ANY(?)
                 """,
-                { rs, _ ->
+                PreparedStatementSetter { ps ->
+                    ps.setObject(1, scope.departmentId)
+                    ps.setString(2, scope.position.name)
+                    ps.setString(3, scope.clearance.name)
+                    ps.setBoolean(4, scope.isAdmin)
+                    ps.setArray(5, ps.connection.createArrayOf("uuid", chunkIds.toTypedArray()))
+                },
+                RowMapper { rs, _ ->
                     VerifiedChunk(
                         rs.getObject("chunk_id", UUID::class.java),
                         rs.getString("content"),
@@ -139,10 +150,7 @@ class QuestionService(
                         rs.getString("title"),
                     )
                 },
-                scope.departmentId,
-                scope.position.name,
-                scope.clearance.name,
-                scope.isAdmin,
-                chunkId,
-            ).firstOrNull()
+            )
+        return rows.associateBy { it.chunkId }
+    }
 }

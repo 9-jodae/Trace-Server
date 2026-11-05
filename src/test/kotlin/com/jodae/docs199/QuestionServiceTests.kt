@@ -60,12 +60,14 @@ class QuestionServiceTests : IntegrationTestBase() {
     private fun insertChunk(
         versionId: UUID,
         content: String,
+        chunkIndex: Int = 0,
     ): UUID {
         val id = UUID.randomUUID()
         jdbc.update(
-            "INSERT INTO chunks(id, document_version_id, chunk_index, content) VALUES (?, ?, 0, ?)",
+            "INSERT INTO chunks(id, document_version_id, chunk_index, content) VALUES (?, ?, ?, ?)",
             id,
             versionId,
+            chunkIndex,
             content,
         )
         return id
@@ -134,6 +136,31 @@ class QuestionServiceTests : IntegrationTestBase() {
         val response = service.ask(hr, null, "질문")
 
         assertEquals(0, response.sources.size)
+    }
+
+    @Test
+    fun resolvesMultipleAndDuplicateSourcesInOneBatchQuery() {
+        val admin = principal("doc.admin@local.docs199")
+        val hr = principal("hr.staff@local.docs199")
+        val source = documentService.createSource(admin, SourceKind.LOCAL, "배치테스트-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val docId = documentService.uploadOne(admin, source.id, "batch.md", file("본문"), Clearance.PUBLIC, emptySet(), null).documentId!!
+        val versionId = documents.currentVersion(docId)!!.id
+        val firstChunkId = insertChunk(versionId, "첫 번째 청크", 0)
+        val secondChunkId = insertChunk(versionId, "두 번째 청크", 1)
+
+        val client = FakeAgentChatClient()
+        client.nextSources =
+            listOf(
+                AgentSource(firstChunkId.toString(), "", "", docId.toString()),
+                AgentSource(firstChunkId.toString(), "", "", docId.toString()),
+                AgentSource(secondChunkId.toString(), "", "", docId.toString()),
+            )
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+
+        val response = service.ask(hr, null, "질문")
+
+        assertEquals(3, response.sources.size)
+        assertEquals(listOf(firstChunkId, firstChunkId, secondChunkId).map(UUID::toString), response.sources.map { it.id })
     }
 
     @Test
