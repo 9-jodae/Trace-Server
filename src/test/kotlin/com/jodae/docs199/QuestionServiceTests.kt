@@ -396,6 +396,11 @@ class QuestionServiceTests : IntegrationTestBase() {
         val chunkId = insertChunk(documents.currentVersion(documentId)!!.id, "A B C D", charStart = 0)
         val client = FakeAgentChatClient()
         client.nextEvidence =
+            listOf(
+                AgentEvidence("잘못된-id-1", "임시 출처", quote = "무효1"),
+                AgentEvidence("잘못된-id-2", "임시 출처", quote = "무효2"),
+                AgentEvidence("잘못된-id-3", "임시 출처", quote = "무효3"),
+            ) +
             listOf("A", "B", "C", "D").map { quote ->
                 AgentEvidence(chunkId.toString(), "임시 출처", quote = quote)
             }

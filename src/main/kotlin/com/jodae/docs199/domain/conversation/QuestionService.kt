@@ -202,34 +202,38 @@ class QuestionService(
         principal: UserPrincipal,
         evidence: List<AgentEvidence>,
     ): List<QuestionEvidenceView> {
-        val limitedEvidence = evidence.take(3)
         val scope = policy.scope(principal)
-        val parsedIds = limitedEvidence.map { runCatching { UUID.fromString(it.chunkId) }.getOrNull() }
-        val verified = fetchVerifiedChunks(scope, parsedIds.filterNotNull().distinct())
-        return limitedEvidence
-            .mapNotNull { item ->
-                val chunkId = runCatching { UUID.fromString(item.chunkId) }.getOrNull() ?: return@mapNotNull null
-                val chunk = verified[chunkId] ?: return@mapNotNull null
-                val claimedDocumentId = item.documentId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-                val claimedVersionId = item.versionId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
-                if ((item.documentId != null && claimedDocumentId != chunk.documentId) ||
-                    (item.versionId != null && claimedVersionId != chunk.versionId)
-                ) {
-                    return@mapNotNull null
-                }
-                if (item.quote.isEmpty() || !chunk.content.contains(item.quote)) return@mapNotNull null
+        return evidence
+            .asSequence()
+            .chunked(32)
+            .flatMap { candidates ->
+                val parsedIds = candidates.map { runCatching { UUID.fromString(it.chunkId) }.getOrNull() }
+                val verified = fetchVerifiedChunks(scope, parsedIds.filterNotNull().distinct())
+                candidates.asSequence().mapNotNull { item ->
+                    val chunkId = runCatching { UUID.fromString(item.chunkId) }.getOrNull() ?: return@mapNotNull null
+                    val chunk = verified[chunkId] ?: return@mapNotNull null
+                    val claimedDocumentId = item.documentId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                    val claimedVersionId = item.versionId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                    if ((item.documentId != null && claimedDocumentId != chunk.documentId) ||
+                        (item.versionId != null && claimedVersionId != chunk.versionId)
+                    ) {
+                        return@mapNotNull null
+                    }
+                    if (item.quote.isEmpty() || !chunk.content.contains(item.quote)) return@mapNotNull null
 
-                val offsets = verifiedQuoteOffsets(chunk, item)
-                QuestionEvidenceView(
-                    chunkId = chunk.chunkId.toString(),
-                    source = chunk.documentTitle,
-                    documentId = chunk.documentId,
-                    versionId = chunk.versionId,
-                    quote = item.quote,
-                    charStart = offsets?.first,
-                    charEnd = offsets?.second,
-                )
-            }
+                    val offsets = verifiedQuoteOffsets(chunk, item)
+                    QuestionEvidenceView(
+                        chunkId = chunk.chunkId.toString(),
+                        source = chunk.documentTitle,
+                        documentId = chunk.documentId,
+                        versionId = chunk.versionId,
+                        quote = item.quote,
+                        charStart = offsets?.first,
+                        charEnd = offsets?.second,
+                    )
+                }
+            }.take(3)
+            .toList()
     }
 
     private fun verifiedQuoteOffsets(
