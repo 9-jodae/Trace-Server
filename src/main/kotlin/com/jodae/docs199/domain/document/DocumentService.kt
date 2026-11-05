@@ -55,6 +55,7 @@ class DocumentService(
     private val events: ApplicationEventPublisher,
     private val cleanupQueue: StorageCleanupQueue,
     @Value("\${app.documents.allowed-extensions:pdf,md}") allowedExtensions: String,
+    @Value("\${app.documents.revision.enabled:true}") private val revisionEnabled: Boolean = true,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val allowed =
@@ -166,6 +167,7 @@ class DocumentService(
             }
             return UploadResult(displayPath, previous.id, latest.versionNumber, "UNCHANGED")
         }
+        if (previous != null && !revisionEnabled) throw ApiException(ErrorCode.REVISION_DISABLED)
         val documentId = previous?.id ?: UUID.randomUUID()
         val number = (previous?.currentVersion ?: 0) + 1
         val effectiveDepartments = departments ?: source.defaultDepartmentId?.let(::setOf) ?: emptySet()

@@ -190,6 +190,22 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     }
 
     @Test
+    fun currentDocumentReportsSearchableOnlyWhenCurrentVersionHasChunks() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "searchable-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val uploaded = service.uploadOne(admin, source.id, "searchable.md", file("searchable content"), null, null, null)
+        val id = uploaded.documentId!!
+        assertFalse(service.detail(admin, id, true).document.searchable)
+        repeat(30) {
+            if (service.detail(admin, id, true).document.searchable) return@repeat
+            Thread.sleep(100)
+        }
+        assertTrue(service.detail(admin, id, true).document.searchable)
+        service.uploadOne(admin, source.id, "searchable.md", file("new current version"), null, null, null)
+        assertFalse(service.detail(admin, id, true).document.searchable)
+    }
+
+    @Test
     fun sourceIndependentIngestSeparatesExternalIdFromDisplayMetadata() {
         val admin = principal("doc.admin@local.docs199")
         val source = service.createSource(admin, SourceKind.OBSIDIAN, "external-${UUID.randomUUID()}", null, Clearance.PUBLIC)
