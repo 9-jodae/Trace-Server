@@ -10,6 +10,7 @@ import com.jodae.docs199.domain.conversation.AgentChatResponse
 import com.jodae.docs199.domain.conversation.AgentEvidence
 import com.jodae.docs199.domain.conversation.AgentKeyword
 import com.jodae.docs199.domain.conversation.AgentSource
+import com.jodae.docs199.domain.conversation.AnswerType
 import com.jodae.docs199.domain.conversation.ConversationRepository
 import com.jodae.docs199.domain.conversation.ConversationService
 import com.jodae.docs199.domain.conversation.HttpAgentChatClient
@@ -50,6 +51,7 @@ class FakeAgentChatClient : AgentChatClient {
     var nextSources: List<AgentSource> = emptyList()
     var nextEvidence: List<AgentEvidence> = emptyList()
     var nextKeywords: List<AgentKeyword> = emptyList()
+    var nextAnswerType: AnswerType? = null
     var nextAnswer: String = "답변"
     var failWith: ApiException? = null
     lateinit var lastRequest: AgentChatRequest
@@ -60,6 +62,7 @@ class FakeAgentChatClient : AgentChatClient {
         return AgentChatResponse(
             threadId = request.threadId ?: UUID.randomUUID().toString(),
             answer = nextAnswer,
+            answerType = nextAnswerType,
             sources = nextSources,
             evidence = nextEvidence,
             keywords = nextKeywords,
@@ -76,7 +79,7 @@ class AgentChatHttpTests {
             received.set(exchange.requestBody.bufferedReader().readText())
             val reply =
                 """
-                {"threadId":"thread","answer":"ok","evidence":[{"chunkId":"00000000-0000-0000-0000-000000000001","source":"source","documentId":null,"versionId":null,"quote":"핵심 문구","charStart":10,"charEnd":15}],"keywords":[{"text":"연차 이월","chunkId":"00000000-0000-0000-0000-000000000001"}]}
+                {"threadId":"thread","answer":"ok","answerType":"CLARIFICATION","evidence":[{"chunkId":"00000000-0000-0000-0000-000000000001","source":"source","documentId":null,"versionId":null,"quote":"핵심 문구","charStart":10,"charEnd":15}],"keywords":[{"text":"연차 이월","chunkId":"00000000-0000-0000-0000-000000000001"}]}
                 """.trimIndent().toByteArray()
             exchange.responseHeaders.set("Content-Type", "application/json")
             exchange.sendResponseHeaders(200, reply.size.toLong())
@@ -92,6 +95,7 @@ class AgentChatHttpTests {
                         AgentChatRequest("질문", "thread", accessScope = AgentAccessScope(departmentId, "MANAGER", "INTERNAL", admin)),
                     )
                 assertEquals("핵심 문구", response.evidence.single().quote)
+                assertEquals(AnswerType.CLARIFICATION, response.answerType)
                 assertEquals(null, response.evidence.single().documentId)
                 assertEquals("연차 이월", response.keywords.single().text)
                 val body = received.get()
@@ -361,6 +365,7 @@ class QuestionServiceTests : IntegrationTestBase() {
         val response = service.ask(hr, null, "연차는 며칠까지 이월되나요?")
 
         assertEquals(1, response.sources.size)
+        assertEquals(AnswerType.ANSWER, response.answerType)
         assertEquals(visibleChunkId.toString(), response.sources[0].id)
         assertEquals("연차는 5일까지 이월 가능", response.sources[0].text)
         assertEquals(client.lastRequest.threadId, response.conversationId.toString())
@@ -395,6 +400,8 @@ class QuestionServiceTests : IntegrationTestBase() {
         val response = service.ask(hr, null, "질문")
 
         assertEquals(0, response.sources.size)
+        assertEquals(AnswerType.NO_EVIDENCE, response.answerType)
+        assertEquals("관련 문서를 찾지 못했습니다.", response.answer)
     }
 
     @Test
@@ -628,6 +635,17 @@ class QuestionServiceTests : IntegrationTestBase() {
         service.ask(hr, conversation.id, "첫 질문")
         assertEquals(conversation.id.toString(), client.lastRequest.threadId)
         assertTrue(conversations.detail(hr, conversation.id).messages.size == 2)
+    }
+
+    @Test
+    fun defaultsEmptySourcesToNoEvidence() {
+        val employee = principal("hr.staff@local.docs199")
+        val client = FakeAgentChatClient()
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+
+        val response = service.ask(employee, null, "hello")
+
+        assertEquals(AnswerType.NO_EVIDENCE, response.answerType)
     }
 
     @Test

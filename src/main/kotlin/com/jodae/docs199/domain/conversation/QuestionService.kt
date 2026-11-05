@@ -34,6 +34,7 @@ data class EvidenceSourceView(
 data class QuestionResponse(
     val conversationId: UUID,
     val answer: String,
+    val answerType: AnswerType,
     val route: String?,
     val contextProbability: Double?,
     val sources: List<EvidenceSourceView>,
@@ -110,16 +111,32 @@ class QuestionService(
         val visible = visibleSources(principal, response.sources)
         val evidence = visibleEvidence(principal, response.evidence)
         val keywords = visibleKeywords(principal, response.keywords)
+        val declaredAnswerType =
+            response.answerType
+                ?: if (response.sources.isEmpty()) AnswerType.NO_EVIDENCE else AnswerType.ANSWER
+        val answerType =
+            if (declaredAnswerType == AnswerType.ANSWER && visible.isEmpty()) {
+                AnswerType.NO_EVIDENCE
+            } else {
+                declaredAnswerType
+            }
+        val answer =
+            if (declaredAnswerType == AnswerType.ANSWER && visible.isEmpty()) {
+                "관련 문서를 찾지 못했습니다."
+            } else {
+                response.answer
+            }
         conversations.addMessage(
             principal,
             conversation.id,
             MessageRole.ASSISTANT,
-            response.answer,
+            answer,
             (visible.map { UUID.fromString(it.id) } + evidence.map { UUID.fromString(it.chunkId) }).toSet(),
         )
         return QuestionResponse(
             conversation.id,
-            response.answer,
+            answer,
+            answerType,
             response.route,
             response.contextProbability,
             visible,
