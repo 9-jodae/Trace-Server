@@ -66,6 +66,7 @@ Authorization: Bearer <token>
 - `label`은 `type`에서 바로 계산하는 고정 문자열(`"REFERENCES"` → `"참조"`, `"CONFLICTS"` → `"충돌"`)이며 관계 행에 별도로 저장하지 않습니다.
 - `detail`은 `CONFLICTS`에만 있고 `REFERENCES`는 `null`입니다.
 - `versionCount`는 삭제되지 않은 모든 버전 수, `currentVersion`은 `documents.current_version`입니다.
+- `ownerDepartment`는 문서에 소유 부서가 지정되지 않은 경우 `null`입니다. 소유 부서는 열람 가능 부서 범위와 별개입니다.
 
 ## 권한 규칙
 
@@ -98,4 +99,5 @@ Authorization: Bearer <token>
 - **`ai_app`에는 이 테이블에 어떤 권한도 부여하지 않습니다.** 그래프는 Spring이 `AccessPolicy`로 필터링해서만 내보내는 기능이고, AI 서버가 원본 `document_relations`를 직접 읽으면 권한 밖 문서의 `detail`(연차 이월 일수 같은 실제 값)까지 그대로 노출되어 API가 보장하는 존재 은닉·내용 보호가 DB 경로에서 무력화됩니다. AI 서버가 그래프 데이터가 필요해지면 그때 별도 합의로 권한 필터링된 인터페이스를 추가합니다(`docs/ai/rules/security.md`, `docs/ai-server-contract.md`의 `ai_app` 권한 원칙과 동일).
 - 조회 서비스는 접근 가능 문서 목록(`accessible_document_versions` 등 기존 함수)로 먼저 필터링한 뒤 그 범위 안의 관계만 그래프로 구성합니다. 별도 권한 규칙을 새로 만들지 않습니다.
 - 관리자 전용 등록·삭제: `POST /api/admin/document-relations`, `DELETE /api/admin/document-relations/{id}` (`DOC_ADMIN` 이상). 등록 API도 관계 종류별 멱등 키와 `CONFLICTS` 정규화 규칙을 적용합니다. 변경 권한은 역할 검사와 관계 양 끝 문서에 대한 기존 `AccessPolicy`를 모두 적용합니다. `DOC_ADMIN`은 열람 권한을 우회하지 않으며, `SYSTEM_ADMIN`은 기존 정책대로 전체 문서에 접근합니다. 등록 시 문서 ID가 없거나 호출자가 열람할 수 없으면 `NOT_FOUND`(404)를 반환하고, 삭제 시에도 관계가 없거나 양 끝 중 하나라도 열람 불가능하면 `NOT_FOUND`(404)로 존재와 권한 없음을 구별하지 않습니다. 역할이 부족하면 `FORBIDDEN`(403)입니다.
-- 적재 스크립트 `scripts/load-demo-relations.py`: `demo/manifest.json`의 `references`/`conflicts`를 관리자 API로 멱등 적재(이미 있는 관계는 건너뜀, `CONFLICTS`는 방향이 달라도 같은 문서 쌍의 같은 `item`으로 인식).
+- 등록 요청은 `{"sourceDocumentId":"<UUID>","targetDocumentId":"<UUID>","type":"REFERENCES|CONFLICTS","detail":{"item":"...","thisValue":"...","otherValue":"..."}}`입니다. `REFERENCES`는 `detail`을 생략하고, `CONFLICTS`는 세 문자열을 모두 지정합니다. 충돌의 저장 방향을 UUID 오름차순으로 정규화하며 방향이 바뀌면 `thisValue`/`otherValue`도 함께 맞바꿉니다. 같은 관계를 다시 등록하면 기존 행을 갱신하고 동일한 충돌 항목은 같은 UUID를 유지합니다.
+- 적재 스크립트 `scripts/load-demo-relations.py`: `demo/manifest.json`의 `references`/`conflicts`를 관리자 API로 멱등 적재합니다. 이미 있는 관계는 같은 식별 키로 갱신하고, `CONFLICTS`는 방향이 달라도 같은 문서 쌍의 같은 `item`으로 인식합니다.
