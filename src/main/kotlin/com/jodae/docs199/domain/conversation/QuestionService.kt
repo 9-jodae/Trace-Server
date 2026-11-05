@@ -98,6 +98,9 @@ class QuestionService(
         val accessScope = AgentAccessScope(scope.departmentId, scope.position.name, scope.clearance.name, scope.isAdmin)
         // AI 호출은 DB 트랜잭션 밖에서 수행한다(최대 70초, 위 두 저장은 이미 각각 커밋됨).
         val response = client.chat(AgentChatRequest(message, conversation.id.toString(), filters, accessScope))
+        if (response.sources.any { !it.id.isUuid() } || response.evidence.any { !it.chunkId.isUuid() }) {
+            throw ApiException(ErrorCode.AI_UNAVAILABLE)
+        }
         val visible = visibleSources(principal, response.sources)
         val evidence = visibleEvidence(principal, response.evidence)
         conversations.addMessage(
@@ -279,3 +282,5 @@ class QuestionService(
         return content.substring(startOffset, endOffset)
     }
 }
+
+private fun String.isUuid(): Boolean = runCatching { UUID.fromString(this) }.isSuccess

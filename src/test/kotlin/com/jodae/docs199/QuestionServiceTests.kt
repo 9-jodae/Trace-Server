@@ -530,6 +530,22 @@ class QuestionServiceTests : IntegrationTestBase() {
     }
 
     @Test
+    fun malformedAiEvidenceIdReturnsAiUnavailableAndKeepsOnlyTheUserMessage() {
+        val hr = principal("hr.staff@local.docs199")
+        val client = FakeAgentChatClient()
+        client.nextEvidence = listOf(AgentEvidence("not-a-uuid", "source", quote = "quote"))
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+
+        val error = assertThrows(ApiException::class.java) { service.ask(hr, null, "질문") }
+        assertEquals(ErrorCode.AI_UNAVAILABLE, error.code)
+
+        val conversationId = UUID.fromString(client.lastRequest.threadId)
+        val detail = conversations.detail(hr, conversationId)
+        assertEquals(1, detail.messages.size)
+        assertEquals(MessageRole.USER, detail.messages.single().role)
+    }
+
+    @Test
     fun askOnExistingConversationReusesThreadId() {
         val hr = principal("hr.staff@local.docs199")
         val client = FakeAgentChatClient()
