@@ -250,6 +250,6 @@ Authorization: Bearer <token>
 - `downloadUrl`은 원문 파일의 15분짜리 Presigned URL입니다(화면에 노출·로그 금지).
 - 청크 ID가 없거나, 삭제된 문서·이전 버전에 속하거나, 사용자가 접근할 수 없는 문서면 전부 `NOT_FOUND`로 응답합니다(어느 경우인지 구분하지 않음).
 
-## 아직 준비 중인 것
+## 문서 관계 그래프
 
-- 문서 관계 그래프 API는 준비 중입니다. 계약은 [그래프 API 안내](graph-api.md)를 참고하세요.
+문서 간 선언된 참조·충돌 관계를 조회하는 그래프 API가 구현되었습니다. 전체 조회는 `GET /api/graph`, 특정 문서 중심 조회는 `GET /api/graph?documentId={id}&depth=1`을 사용합니다. 요청·응답 형식과 접근 제어 규칙은 [그래프 API 상세 안내](graph-api.md)를 참고하세요.
