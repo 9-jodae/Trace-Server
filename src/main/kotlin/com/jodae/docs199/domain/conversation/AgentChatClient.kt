@@ -51,6 +51,11 @@ data class AgentEvidence(
     val charEnd: Int? = null,
 )
 
+data class AgentKeyword(
+    val text: String,
+    val chunkId: String,
+)
+
 data class AgentChatResponse(
     val threadId: String,
     val answer: String,
@@ -60,6 +65,7 @@ data class AgentChatResponse(
     val evidence: List<AgentEvidence> = emptyList(),
     val failedSources: List<String> = emptyList(),
     val fallbackReason: String? = null,
+    val keywords: List<AgentKeyword> = emptyList(),
 )
 
 interface AgentChatClient {

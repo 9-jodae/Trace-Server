@@ -32,7 +32,7 @@ AI 서버는 `POST /api/internal/ingestion-jobs/{id}/result`에 같은 공유 �
 
 - 인증: `X-Internal-Secret` 헤더(ingest 콜백과 같은 `INTERNAL_SECRET` 값)
 - 요청: `{"message": "...", "threadId": "대화ID 또는 null", "filters": {...} | null, "accessScope": {"departmentId": "<uuid>", "position": "<직급>", "clearance": "<보안 등급>", "isAdmin": <bool>}}`. `threadId`는 Spring의 `conversations.id`를 그대로 씁니다. **Spring이 호출자가 그 대화의 소유자인지 먼저 확인한 뒤에만 넘기므로, AI 서버는 Spring이 보낸 `threadId`를 신뢰해도 됩니다.** `accessScope`는 호출한 사용자의 `AccessPolicy.scope(principal)` 결과(`department_id uuid, position text, clearance text, is_admin boolean`)를 그대로 담은 값으로, 아래 "청크·권한 보장 조회 함수" 절의 세 함수에 넘기는 네 인자와 이름·값이 같습니다.
-- 응답: `{"threadId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","versionId","charStart","charEnd"}], "evidence": [{"chunkId","source","documentId","versionId","quote","charStart","charEnd"}], "failedSources": [...], "fallbackReason": null|"..."}`. `sources[].documentId`로 사용자가 접근할 수 없는 문서의 출처는 Spring이 응답에서 제외합니다(`AccessPolicy`). `sources[].id`(청크 ID, UUID)는 접근 가능한 것만 `conversation_messages.evidence_chunk_ids`에 저장합니다.
+- 응답: `{"threadId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","versionId","charStart","charEnd"}], "evidence": [{"chunkId","source","documentId","versionId","quote","charStart","charEnd"}], "keywords": [{"text","chunkId"}], "failedSources": [...], "fallbackReason": null|"..."}`. `sources[].documentId`로 사용자가 접근할 수 없는 문서의 출처는 Spring이 응답에서 제외합니다(`AccessPolicy`). `sources[].id`(청크 ID, UUID)는 접근 가능한 것만 `conversation_messages.evidence_chunk_ids`에 저장합니다.
 
 `AgentChatResponse.evidence`의 AI 응답 형식은 다음과 같습니다. 제안 필드명과 계약은 AI·프론트와 최종 합의 전 임시입니다.
 
@@ -182,6 +182,12 @@ AI의 `documentId`, `versionId`, `source` 값은 신뢰하지 않습니다. `chu
 프론트는 검증된 `quote`를 답변 아래에 표시합니다. 하이라이트에는 원문 코드 포인트 오프셋을 JavaScript UTF-16 인덱스로 변환해야 합니다. 위치가 `null`이면 청크 단위로 표시합니다. 실제 LLM 인용 정확도 검증은 Bedrock Haiku 권한이 확보된 뒤 진행하며, 그 전에는 고정 mock 응답으로 계약을 확인합니다.
 
 **가정:** 검색 필터가 있으면 AI 서버는 이전 근거 재사용과 JEV를 건너뛰고 현재 필터로 새로 검색합니다. `threadId`의 소유자는 Spring이 확인합니다. 실제 연동 검증은 AI 서비스와 적재된 청크가 준비된 뒤 진행합니다. `evidence`의 필드 이름과 반복 인용 위치 정책은 AI·프론트 팀과 확인이 필요합니다.
+
+## 핵심 키워드 (`keywords`, Issue #78)
+
+AI는 같은 답변 생성 호출에서 중요도순으로 최대 3개의 키워드를 `{"text":"원문에 있는 문구","chunkId":"<UUID>"}` 형식으로 반환합니다. 새 LLM 호출은 추가하지 않습니다. 키워드가 없거나 `ANSWER`가 아닌 응답이면 `[]`를 반환합니다. AI는 `text`가 청크 본문에 그대로 있는지 확인해야 합니다.
+
+Spring은 청크 ID를 UUID로 해석하고 DB에서 현재 버전과 `AccessPolicy` 접근 권한을 확인합니다. 문구가 해당 청크 본문에 정확히 포함되는 경우만 반환하고, 잘못된 ID, 접근 불가/삭제/구버전 청크, 원문에 없는 문구는 제외합니다. 중복 `text`를 제거하고 최대 3개를 유지합니다. 응답은 `keywords: [{text, chunkId}]`이며, 핵심 문장은 별도 필드 없이 기존 `evidence[].quote`를 사용합니다. 키워드와 근거 문구는 시연 단계에서 대화 이력에 저장하지 않으며 이력 복원 시 다시 제공되지 않습니다.
 
 ## 임시 임베딩 중계 API
 

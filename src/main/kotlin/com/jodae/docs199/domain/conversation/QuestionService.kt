@@ -40,6 +40,7 @@ data class QuestionResponse(
     val evidence: List<QuestionEvidenceView>,
     val failedSources: List<String>,
     val fallbackReason: String?,
+    val keywords: List<QuestionKeywordView> = emptyList(),
 )
 
 data class QuestionEvidenceView(
@@ -50,6 +51,11 @@ data class QuestionEvidenceView(
     val quote: String,
     val charStart: Int?,
     val charEnd: Int?,
+)
+
+data class QuestionKeywordView(
+    val text: String,
+    val chunkId: String,
 )
 
 private data class VerifiedChunk(
@@ -103,6 +109,7 @@ class QuestionService(
         }
         val visible = visibleSources(principal, response.sources)
         val evidence = visibleEvidence(principal, response.evidence)
+        val keywords = visibleKeywords(principal, response.keywords)
         conversations.addMessage(
             principal,
             conversation.id,
@@ -119,6 +126,7 @@ class QuestionService(
             evidence,
             response.failedSources,
             response.fallbackReason,
+            keywords,
         )
     }
 
@@ -236,6 +244,28 @@ class QuestionService(
                     )
                 }
             }.take(3)
+            .toList()
+    }
+
+    private fun visibleKeywords(
+        principal: UserPrincipal,
+        keywords: List<AgentKeyword>,
+    ): List<QuestionKeywordView> {
+        val scope = policy.scope(principal)
+        return keywords
+            .asSequence()
+            .chunked(32)
+            .flatMap { candidates ->
+                val parsedIds = candidates.map { runCatching { UUID.fromString(it.chunkId) }.getOrNull() }
+                val verified = fetchVerifiedChunks(scope, parsedIds.filterNotNull().distinct())
+                candidates.asSequence().mapNotNull { item ->
+                    val chunkId = runCatching { UUID.fromString(item.chunkId) }.getOrNull() ?: return@mapNotNull null
+                    val chunk = verified[chunkId] ?: return@mapNotNull null
+                    if (item.text.isBlank() || !chunk.content.contains(item.text)) return@mapNotNull null
+                    QuestionKeywordView(item.text, chunk.chunkId.toString())
+                }
+            }.distinctBy { it.text }
+            .take(3)
             .toList()
     }
 
