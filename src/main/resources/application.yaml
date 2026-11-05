@@ -19,6 +19,10 @@ app:
   demo-seed: true
   demo-password: ${DEMO_PASSWORD:local-demo-1234}
   internal-secret: ${INTERNAL_SECRET:local-internal-secret-change-before-production}
+  embedding-proxy:
+    enabled: ${EMBEDDING_PROXY_ENABLED:false}
+    region: ${BEDROCK_EMBEDDING_REGION:ap-northeast-1}
+    model-id: ${BEDROCK_EMBEDDING_MODEL_ID:amazon.titan-embed-text-v2:0}
   documents:
     allowed-extensions: ${ALLOWED_EXTENSIONS:pdf,md}
   jwt-secret: ${JWT_SECRET:local-development-secret-change-before-production-123456}
