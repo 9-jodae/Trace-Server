@@ -103,13 +103,13 @@ def main():
             empty.append(str(doc_id))
         documents.append({"doc_id": str(doc_id), "version_id": str(version_id), "title": title, "text": text})
         counts[extension] += 1
-    write_json(args.output, documents)
     print(f"대상 현재 문서: {len(rows)}개, 내보낸 문서: {len(documents)}개")
     print("형식별: " + ", ".join(f"{key} {counts[key]}개" for key in sorted(counts)))
     print("건너뛴 문서: " + (", ".join(f"{doc_id} ({ext})" for doc_id, ext in skipped) or "없음"))
     print("빈 본문 문서: " + (", ".join(empty) or "없음"))
     if skipped or empty:
         raise RuntimeError("누락 또는 빈 본문이 있어 전달 전 확인이 필요합니다.")
+    write_json(args.output, documents)
 
 
 if __name__ == "__main__":
