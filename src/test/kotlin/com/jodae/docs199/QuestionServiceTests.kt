@@ -195,7 +195,7 @@ class AgentChatHttpTests {
                     val error = assertThrows(ApiException::class.java) { client.chat(AgentChatRequest("질문", "thread")) }
                     assertEquals(ErrorCode.AI_UNAVAILABLE, error.code)
                 }
-            assertTrue(elapsed < 2500, "본문 수신이 계속돼 전체 요청 제한시간이 무시됐습니다: ${elapsed}ms")
+            assertTrue(elapsed < 2000, "본문 수신이 계속돼 전체 요청 제한시간이 무시됐습니다: ${elapsed}ms")
         } finally {
             server.stop(0)
         }
