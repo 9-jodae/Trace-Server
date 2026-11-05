@@ -6,12 +6,13 @@ import json
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 def api(session, base_url, method, path, token=None, body=None):
     headers = {"Accept": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    response = session.request(method, f"{base_url}{path}", headers=headers, json=body, timeout=30)
+    response = session.request(method, f"{base_url}{path}", headers=headers, json=body, timeout=30, allow_redirects=False)
     try:
         payload = response.json()
     except ValueError as exc:
@@ -28,6 +29,21 @@ def login(session, base_url, email, password):
     return data["accessToken"]
 
 
+def valid_base_url(base_url):
+    parsed = urlparse(base_url)
+    return parsed.scheme == "https" or (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"})
+
+
+def source_ids(session, base_url, token):
+    result = {}
+    for source in api(session, base_url, "GET", "/api/admin/sources", token):
+        key = (source["kind"], source["name"])
+        if key in result:
+            raise RuntimeError(f"동일한 종류와 이름의 소스가 중복되었습니다: {key[0]}, {key[1]}")
+        result[key] = source["id"]
+    return result
+
+
 def document_ids(session, base_url, token):
     result = {}
     page = 0
@@ -35,19 +51,19 @@ def document_ids(session, base_url, token):
         data = api(session, base_url, "GET", f"/api/admin/documents?page={page}&size=100", token)
         items = data.get("items", [])
         for doc in items:
-            result[doc.get("externalId")] = doc["id"]
-            result[doc.get("relativePath")] = doc["id"]
+            result[(doc["sourceId"], doc["relativePath"])] = doc["id"]
         if page + 1 >= data.get("totalPages", 0):
             return result
         page += 1
 
 
-def build_relations(entries, ids_by_path):
+def build_relations(entries, ids_by_source_path, source_ids_by_name):
     ids_by_key = {}
     for entry in entries:
-        doc_id = ids_by_path.get(entry.get("sourceRelativePath"))
-        if not doc_id:
-            doc_id = ids_by_path.get(entry.get("obsidianRelativePath"))
+        source_key = (entry.get("sourceKind"), entry.get("sourceName"))
+        source_id = source_ids_by_name.get(source_key)
+        relative_path = entry.get("obsidianRelativePath") if entry.get("sourceKind") == "OBSIDIAN" else entry.get("sourceRelativePath")
+        doc_id = ids_by_source_path.get((source_id, relative_path)) if source_id and relative_path else None
         if doc_id:
             ids_by_key[entry["id"]] = doc_id
             ids_by_key[entry.get("logicalId", entry["id"])] = doc_id
@@ -108,6 +124,14 @@ def main():
         print("오류: DEMO_PASSWORD 환경 변수가 필요합니다.", file=sys.stderr)
         return 2
 
+    parsed_url = urlparse(args.base_url)
+    if not valid_base_url(args.base_url):
+        print("오류: 서버 URL은 HTTPS 또는 localhost/loopback HTTP여야 합니다.", file=sys.stderr)
+        return 2
+    if parsed_url.username or parsed_url.password or not parsed_url.hostname:
+        print("오류: 서버 URL 형식이 올바르지 않습니다.", file=sys.stderr)
+        return 2
+
     base_url = args.base_url.rstrip("/")
     manifest_path = Path(args.manifest)
     try:
@@ -119,9 +143,10 @@ def main():
     session = requests.Session()
     try:
         token = login(session, base_url, args.admin_email, password)
-        ids_by_path = document_ids(session, base_url, token)
+        ids_by_source_path = document_ids(session, base_url, token)
+        source_ids_by_name = source_ids(session, base_url, token)
         entries = manifest.get("documents", [])
-        pending, missing = build_relations(entries, ids_by_path)
+        pending, missing = build_relations(entries, ids_by_source_path, source_ids_by_name)
 
         if missing:
             raise RuntimeError(f"manifest 관계 문서 ID를 API에서 찾지 못했습니다: {', '.join(sorted(missing))}")

@@ -15,6 +15,8 @@ CREATE TABLE document_relations (
         OR (
             relation_type = 'CONFLICTS'
             AND jsonb_typeof(detail) = 'object'
+            AND detail IS NOT NULL
+            AND detail ?& ARRAY['item', 'thisValue', 'otherValue']
             AND jsonb_typeof(detail->'item') = 'string'
             AND length(trim(detail->>'item')) > 0
             AND jsonb_typeof(detail->'thisValue') = 'string'

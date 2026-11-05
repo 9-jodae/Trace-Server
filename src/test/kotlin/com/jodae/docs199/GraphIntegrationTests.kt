@@ -18,10 +18,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.resttestclient.TestRestTemplate
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpEntity
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.mock.web.MockMultipartFile
 import java.util.UUID
 
@@ -33,6 +35,8 @@ class GraphIntegrationTests : IntegrationTestBase() {
     @Autowired lateinit var users: UserRepository
 
     @Autowired lateinit var rest: TestRestTemplate
+
+    @Autowired lateinit var jdbc: JdbcTemplate
 
     private fun principal(email: String): UserPrincipal {
         val user = users.findByEmail(email)!!
@@ -159,6 +163,27 @@ class GraphIntegrationTests : IntegrationTestBase() {
                     setOf(it.source, it.target) == setOf(first, second)
             },
         )
+    }
+
+    @Test
+    fun databaseRejectsConflictDetailsWithMissingRequiredKeys() {
+        val systemAdmin = principal("system.admin@local.docs199")
+        val source = documents.createSource(systemAdmin, SourceKind.LOCAL, "constraint-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val first = createDocument(systemAdmin, source.id, "constraint-a-${UUID.randomUUID()}")
+        val second = createDocument(systemAdmin, source.id, "constraint-b-${UUID.randomUUID()}")
+        val (left, right) = listOf(first, second).sortedBy { it.toString() }
+
+        assertThrows(DataIntegrityViolationException::class.java) {
+            jdbc.update(
+                """
+                INSERT INTO document_relations (id, source_document_id, target_document_id, relation_type, detail)
+                VALUES (?, ?, ?, 'CONFLICTS', '{"item":"연차","thisValue":"5일"}'::jsonb)
+                """.trimIndent(),
+                UUID.randomUUID(),
+                left,
+                right,
+            )
+        }
     }
 
     @Test
