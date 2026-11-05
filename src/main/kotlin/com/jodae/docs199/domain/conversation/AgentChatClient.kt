@@ -1,5 +1,6 @@
 package com.jodae.docs199.domain.conversation
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
 import org.springframework.beans.factory.annotation.Value
@@ -10,9 +11,11 @@ import org.springframework.web.client.RestClient
 import java.time.Duration
 import java.util.UUID
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class AgentChatRequest(
     val message: String,
     val threadId: String?,
+    val filters: SearchFilters? = null,
 )
 
 data class AgentSource(

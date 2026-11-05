@@ -2,6 +2,7 @@ package com.jodae.docs199
 
 import com.jodae.docs199.domain.document.DocumentRepository
 import com.jodae.docs199.domain.document.DocumentService
+import com.jodae.docs199.domain.document.JobStatus
 import com.jodae.docs199.domain.document.SourceKind
 import com.jodae.docs199.domain.user.Clearance
 import com.jodae.docs199.domain.user.Position
@@ -18,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.mock.web.MockMultipartFile
 import java.sql.SQLException
+import java.time.LocalDate
 import java.util.UUID
 import javax.sql.DataSource
 
@@ -52,6 +54,104 @@ class ChunksAccessTests : IntegrationTestBase() {
                 scope.clearance.name,
                 scope.isAdmin,
             ).toSet()
+    }
+
+    @Test
+    fun filteredFunctionsCombineMetadataAndAccessAndKeepFourArgumentCalls() {
+        val admin = principal("doc.admin@local.docs199")
+        val hr = principal("hr.staff@local.docs199")
+        val dev = principal("dev.manager@local.docs199")
+        val local = documentService.createSource(admin, SourceKind.LOCAL, "필터-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val obsidian = documentService.createSource(admin, SourceKind.OBSIDIAN, "필터-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val date = LocalDate.of(2026, 5, 10)
+
+        fun create(
+            sourceId: UUID,
+            path: String,
+            clearance: Clearance,
+            departments: Set<UUID>,
+            authored: LocalDate?,
+        ): Pair<UUID, UUID> {
+            val id =
+                documentService
+                    .uploadOne(
+                        admin,
+                        sourceId,
+                        path,
+                        file(path),
+                        clearance,
+                        departments,
+                        null,
+                        authoredAt = authored,
+                    ).documentId!!
+            val version = repository.currentVersion(id)!!.id
+            val deadline =
+                System.nanoTime() +
+                    java.util.concurrent.TimeUnit.SECONDS
+                        .toNanos(5)
+            while (repository.jobForVersion(version)?.status != JobStatus.DONE && System.nanoTime() < deadline) {
+                Thread.sleep(25)
+            }
+            assertEquals(JobStatus.DONE, repository.jobForVersion(version)?.status)
+            jdbc.update("UPDATE documents SET document_type = 'REPORT' WHERE id = ?", id)
+            val chunk = UUID.randomUUID()
+            jdbc.update("INSERT INTO chunks(id, document_version_id, chunk_index, content) VALUES (?, ?, 0, 'test')", chunk, version)
+            return version to chunk
+        }
+        val visible = create(local.id, "visible.md", Clearance.PUBLIC, emptySet(), date)
+        val secret = create(local.id, "secret.md", Clearance.CONFIDENTIAL, setOf(dev.departmentId), date)
+        val otherSource = create(obsidian.id, "other.md", Clearance.PUBLIC, emptySet(), date)
+        val noDate = create(local.id, "undated.md", Clearance.PUBLIC, emptySet(), null)
+        val scope = policy.scope(hr)
+        dataSource.connection.use { connection ->
+            connection.createStatement().use { it.execute("SET ROLE ai_app") }
+            try {
+                fun query(
+                    function: String,
+                    filtered: Boolean,
+                    allNull: Boolean = false,
+                ): Set<UUID> {
+                    val sql = if (filtered) "SELECT * FROM $function(?, ?, ?, ?, ?, ?, ?, ?, ?)" else "SELECT * FROM $function(?, ?, ?, ?)"
+                    return connection.prepareStatement(sql).use { ps ->
+                        ps.setObject(1, scope.departmentId)
+                        ps.setString(2, scope.position.name)
+                        ps.setString(3, scope.clearance.name)
+                        ps.setBoolean(4, scope.isAdmin)
+                        if (filtered && allNull) {
+                            (5..7).forEach { ps.setNull(it, java.sql.Types.ARRAY) }
+                            (8..9).forEach { ps.setNull(it, java.sql.Types.DATE) }
+                        } else if (filtered) {
+                            ps.setArray(5, connection.createArrayOf("text", arrayOf("md")))
+                            ps.setArray(6, connection.createArrayOf("text", arrayOf("REPORT")))
+                            ps.setArray(7, connection.createArrayOf("text", arrayOf("LOCAL")))
+                            ps.setObject(8, date)
+                            ps.setObject(9, date)
+                        }
+                        ps.executeQuery().use { rs ->
+                            buildSet { while (rs.next()) add(rs.getObject(1, UUID::class.java)) }
+                        }
+                    }
+                }
+                val legacy = query("accessible_document_versions", false)
+                assertEquals(legacy, query("accessible_document_versions", true, allNull = true))
+                assertTrue(setOf(visible.first, otherSource.first, noDate.first).all { it in legacy })
+                assertFalse(secret.first in legacy)
+                assertEquals(
+                    setOf(visible.first),
+                    query(
+                        "accessible_document_versions",
+                        true,
+                    ).intersect(setOf(visible.first, secret.first, otherSource.first, noDate.first)),
+                )
+                assertEquals(
+                    setOf(visible.second),
+                    query("accessible_chunks", true).intersect(setOf(visible.second, secret.second, otherSource.second, noDate.second)),
+                )
+                assertTrue(visible.second in query("accessible_chunks", false))
+            } finally {
+                connection.createStatement().use { it.execute("RESET ROLE") }
+            }
+        }
     }
 
     @Test

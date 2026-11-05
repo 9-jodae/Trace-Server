@@ -10,4 +10,5 @@ CLAUDE.local.md
 AGENTS.override.md
 .claude/settings.local.json
 .venv/
+.venv-export/
 __pycache__/

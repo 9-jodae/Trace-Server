@@ -79,6 +79,28 @@ AI 서버는 `POST /api/internal/ingestion-jobs/{id}/result`에 같은 공유 �
 
 **AI 팀 확인 필요:** 질문 API가 이 네 값(`AccessScope`)을 요청에 실어 보내는 기능은 AI 서버가 받을 준비가 되면 추가합니다(지금은 문서화만, 코드는 아직 전달하지 않음).
 
+### 질문 검색 필터 (AI 팀 연동 필요)
+
+질문 요청에는 선택적으로 아래 `filters`를 넣을 수 있으며 Spring은 값을 검증한 후 AI 요청에 그대로 전달합니다.
+
+```json
+{"message":"출장비는?","threadId":"대화 UUID","filters":{"extensions":["pdf","md"],"documentTypes":["REPORT"],"sourceKinds":["LOCAL","OBSIDIAN"],"authoredFrom":"2026-01-01","authoredTo":"2026-12-31"}}
+```
+
+각 배열의 값은 OR, 서로 다른 필드와 작성일 양 끝은 AND입니다. 선택 필드는 생략하거나 `null`로 필터를 끌 수 있고, 빈 배열은 API에서 거부합니다. 확장자는 `ALLOWED_EXTENSIONS`의 소문자 값, 문서 유형은 `HANDOVER`/`APPROVAL`/`REPORT`/`PRESENTATION`/`ETC`, 소스 종류는 `LOCAL`/`OBSIDIAN`/`NOTION`입니다. 작성일이 없는 문서는 기간 필터가 있으면 제외합니다.
+
+V13의 9인자 `accessible_chunks`와 `accessible_document_versions`에 각각 `extensions` → `p_extensions`, `documentTypes` → `p_document_types`, `sourceKinds` → `p_source_kinds`, `authoredFrom` → `p_authored_from`, `authoredTo` → `p_authored_to`를 넘깁니다. 필터가 없는 인자는 명시적으로 `NULL`을 넣습니다. 기존 4인자 함수는 그대로 유지되며 AI 계정은 두 시그니처 모두 호출할 수 있습니다. PostgreSQL에서 9인자 오버로드의 나머지 인자에 기본값을 지정하면 기존 4인자 호출이 모호해지므로 새 오버로드는 9개 인자를 모두 받습니다.
+
+```sql
+SELECT c.* FROM accessible_chunks(
+    :department_id, :position, :clearance, :is_admin,
+    ARRAY['pdf','md']::text[], ARRAY['REPORT']::text[], ARRAY['LOCAL']::text[],
+    DATE '2026-01-01', DATE '2026-12-31'
+) c;
+```
+
+**가정:** 아직 필터를 지원하지 않는 AI 서버가 추가 JSON 필드를 무시하면 기존 질문은 계속 동작하지만, 검색 결과에 필터가 적용되지는 않습니다. AI 서버가 `filters`를 위 함수에 연결하기 전에는 필터 적용을 보장할 수 없습니다. Spring의 기존 출처 재검증은 권한·현재 버전 확인을 유지하며, AI 답변 본문을 필터 조건으로 재검증하지 않습니다. 검색 전 권한 범위 전달과 대화 맥락 재사용의 필터 적용도 AI 팀과 확인해야 합니다.
+
 ## 데모 일괄 적재(방법 1)
 
 현재 버전의 원문을 일회성 JSON으로 만들어 AI 팀에 전달합니다. 저장소 루트에서 Python 가상 환경에 `boto3`, `psycopg[binary]`, `pypdf`, `python-dotenv`를 설치한 뒤 실행합니다.

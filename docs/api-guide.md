@@ -110,6 +110,24 @@ Authorization: Bearer <token>
 
 모든 쿼리 파라미터는 선택입니다. `sourceKind`는 `LOCAL`/`OBSIDIAN`/`NOTION`, `status`는 처리 상태(`PENDING`/`PROCESSING`/`DONE`/`FAILED`)입니다. 응답 `data`는 `PageResponse<문서>`이며 각 문서는 `id`, `sourceId`, `externalId`, `title`, `relativePath`, `extension`, `documentType`, `author`, `authoredAt`, `clearance`, `minimumPosition`, `currentVersion`, `deletedAt`, `ownerDepartmentId`, `sourceModifiedAt`를 포함합니다.
 
+### 문서 목록과 질문 검색 필터
+
+질문 API(`POST /api/conversations/messages`, `POST /api/conversations/{id}/messages`)의 JSON에 `filters`를 선택적으로 넣습니다. 문서 목록은 쿼리 파라미터를 사용합니다.
+
+| 조건 | 문서 목록 | 질문 `filters` | 허용 값 |
+| --- | --- | --- | --- |
+| 확장자 | `extension` | `extensions` | `ALLOWED_EXTENSIONS`의 소문자 값(기본 `pdf`, `md`) |
+| 문서 유형 | `documentType` | `documentTypes` | `HANDOVER`, `APPROVAL`, `REPORT`, `PRESENTATION`, `ETC` |
+| 소스 종류 | `sourceKind` | `sourceKinds` | `LOCAL`, `OBSIDIAN`, `NOTION` |
+| 작성 기간 | `authoredFrom`, `authoredTo` | `authoredFrom`, `authoredTo` | `YYYY-MM-DD`, 양 끝 포함 |
+| 소스 ID | `sourceId` | 지원하지 않음 | UUID |
+| 처리 상태 | `status` | 지원하지 않음 | `PENDING`, `PROCESSING`, `DONE`, `FAILED` |
+| 소유 부서 | `ownerDepartmentId` | 지원하지 않음 | UUID |
+
+예: `{"message":"출장비는?","filters":{"extensions":["pdf"],"documentTypes":["REPORT"],"sourceKinds":["LOCAL"],"authoredFrom":"2026-01-01","authoredTo":"2026-12-31"}}`. 배열은 비어 있으면 안 되며 알 수 없는 값, 잘못된 날짜, 시작일이 종료일보다 늦은 경우 400입니다. 배열 내부는 OR, 서로 다른 조건은 AND입니다. 작성일이 없는 문서는 기간 조건에서 제외됩니다.
+
+**가정:** AI 서버가 아직 `filters`를 처리하지 않으면 요청은 기존처럼 처리될 수 있지만 검색 필터는 적용되지 않습니다. 실제 적용은 AI 서버 연동 후 확인이 필요하며, Spring의 출처 검증은 기존 권한·현재 버전 검사입니다. 상세는 [AI 서버 계약](ai-server-contract.md#질문-검색-필터-ai-팀-연동-필요)을 참조하세요.
+
 ```http
 GET /api/documents/{id}
 ```
@@ -132,7 +150,7 @@ GET /api/documents/{id}/status
 
 ## 대화
 
-질문 API(준비 중)가 쓸 대화 저장소입니다. 지금은 **생성 API가 없고** 조회·삭제만 가능합니다. 모든 요청은 본인 대화만 접근할 수 있으며(관리자 예외 없음), 다른 사용자의 대화 ID는 `NOT_FOUND`로 응답합니다.
+새 질문을 보내면 대화가 생성됩니다. 대화 목록·상세 조회와 삭제도 제공하며, 모든 요청은 본인 대화만 접근할 수 있습니다(관리자 예외 없음). 다른 사용자의 대화 ID는 `NOT_FOUND`로 응답합니다.
 
 ```http
 GET /api/conversations
