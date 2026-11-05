@@ -172,7 +172,15 @@ GET /api/documents/{id}
 GET /api/documents/{id}/download-url
 ```
 
-응답 `data`: `{"url": "https://... (15분 유효 presigned URL)"}`. 이 URL은 화면에 노출하거나 로그에 남기지 않습니다.
+응답 `data`: `{"url": "/api/documents/{id}/download"}`. URL은 Spring API 경로이며, 로그인 인증과 문서 접근 권한을 검사한 뒤 파일을 스트리밍합니다.
+
+```http
+GET /api/documents/{id}/download
+GET /api/documents/{id}/versions/{versionId}/download
+Authorization: Bearer <token>
+```
+
+파일을 Spring을 통해 스트리밍합니다. 버전 경로는 근거 조회 결과의 `versionId`와 함께 사용합니다. 관리자는 `/api/admin/documents/{id}/download` 및 `/api/admin/documents/{id}/versions/{versionId}/download`를 사용합니다.
 
 ```http
 GET /api/documents/{id}/status
@@ -247,7 +255,7 @@ Authorization: Bearer <token>
 
 - `content`가 현재 청크의 전체 텍스트이고, `charStart`/`charEnd`는 그 안에서 하이라이트할 위치입니다(둘 다 있으면 `content.substring(charStart, charEnd)`를 강조 표시). PDF는 아직 페이지·좌표(`bbox`)가 없어 `page`만 있고 `charStart`/`charEnd`가 `null`일 수 있습니다.
 - `previousChunk`/`nextChunk`는 앞뒤 문맥용 텍스트이며 문서의 시작·끝이면 `null`입니다. 화면에는 `previousChunk` → `content`(하이라이트) → `nextChunk` 순서로 이어 붙여 보여주면 자연스럽습니다.
-- `downloadUrl`은 원문 파일의 15분짜리 Presigned URL입니다(화면에 노출·로그 금지).
+- `downloadUrl`은 Spring 원문 다운로드 API 경로입니다. 로그인 인증과 문서 접근 권한을 검사하며, 해당 근거의 버전을 내려받습니다.
 - 청크 ID가 없거나, 삭제된 문서·이전 버전에 속하거나, 사용자가 접근할 수 없는 문서면 전부 `NOT_FOUND`로 응답합니다(어느 경우인지 구분하지 않음).
 
 ## 문서 관계 그래프

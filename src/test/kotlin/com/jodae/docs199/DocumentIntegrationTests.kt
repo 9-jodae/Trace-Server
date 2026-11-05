@@ -19,6 +19,7 @@ import com.jodae.docs199.domain.user.UserRepository
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.security.UserPrincipal
 import com.jodae.docs199.global.storage.FileStorage
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -36,7 +37,6 @@ import org.springframework.mock.web.MockMultipartFile
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.util.LinkedMultiValueMap
-import java.net.URI
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -71,6 +71,85 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     private fun file(text: String) = MockMultipartFile("file", "memo.md", "text/markdown", text.toByteArray())
 
     @Test
+    fun streamsCurrentAndHistoricalVersionsOnlyWhenAccessible() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "download-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val first = service.uploadOne(admin, source.id, "memo.md", file("first-version"), null, null, null)
+        val documentId = first.documentId!!
+        val firstVersionId = repository.versions(documentId).first().id
+        service.uploadOne(admin, source.id, "memo.md", file("current-version"), null, null, null)
+
+        val adminLogin = rest.postForEntity("/api/dev/token", null, String::class.java)
+        val adminToken = Regex("\"accessToken\":\"([^\"]+)\"").find(adminLogin.body!!)!!.groupValues[1]
+        val adminHeaders = HttpHeaders().apply { setBearerAuth(adminToken) }
+        val adminDownload =
+            rest.exchange(
+                "/api/admin/documents/$documentId/download",
+                HttpMethod.GET,
+                HttpEntity<Void>(adminHeaders),
+                ByteArray::class.java,
+            )
+        assertEquals(HttpStatus.OK, adminDownload.statusCode)
+        assertArrayEquals("current-version".toByteArray(), adminDownload.body)
+
+        val login =
+            rest.postForEntity(
+                "/api/auth/login",
+                HttpEntity(
+                    """{"email":"hr.staff@local.docs199","password":"local-demo-1234"}""",
+                    HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON },
+                ),
+                String::class.java,
+            )
+        val token = Regex("\"accessToken\":\"([^\"]+)\"").find(login.body!!)!!.groupValues[1]
+        val headers = HttpHeaders().apply { setBearerAuth(token) }
+
+        val current =
+            rest.exchange(
+                "/api/documents/$documentId/download",
+                HttpMethod.GET,
+                HttpEntity<Void>(headers),
+                ByteArray::class.java,
+            )
+        assertEquals(HttpStatus.OK, current.statusCode)
+        assertArrayEquals("current-version".toByteArray(), current.body)
+        assertTrue(current.headers.getFirst(HttpHeaders.CONTENT_DISPOSITION)!!.startsWith("inline"))
+
+        val historical =
+            rest.exchange(
+                "/api/documents/$documentId/versions/$firstVersionId/download",
+                HttpMethod.GET,
+                HttpEntity<Void>(headers),
+                ByteArray::class.java,
+            )
+        assertEquals(HttpStatus.OK, historical.statusCode)
+        assertArrayEquals("first-version".toByteArray(), historical.body)
+
+        val restrictedUpload =
+            service.uploadOne(
+                admin,
+                source.id,
+                "restricted.md",
+                file("restricted"),
+                Clearance.CONFIDENTIAL,
+                null,
+                null,
+            )
+        val restricted = restrictedUpload.documentId!!
+        val denied =
+            rest.exchange(
+                "/api/documents/$restricted/download",
+                HttpMethod.GET,
+                HttpEntity<Void>(headers),
+                ByteArray::class.java,
+            )
+        assertEquals(HttpStatus.NOT_FOUND, denied.statusCode)
+
+        val anonymous = rest.getForEntity("/api/documents/$documentId/download", ByteArray::class.java)
+        assertEquals(HttpStatus.UNAUTHORIZED, anonymous.statusCode)
+    }
+
+    @Test
     fun uploadVersionJobAndExclusions() {
         val admin = principal("doc.admin@local.docs199")
         val source = service.createSource(admin, SourceKind.LOCAL, "테스트-${UUID.randomUUID()}", null, Clearance.PUBLIC)
@@ -92,8 +171,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
         assertEquals("plain", repository.document(fallback.documentId!!)?.title)
         assertEquals(1, first.version)
         val url = service.downloadUrl(admin, id, true)
-        assertTrue(url.contains("documents/"))
-        assertEquals("첫 내용", URI(url).toURL().openStream().use { it.readAllBytes().decodeToString() })
+        assertEquals("/api/admin/documents/$id/download", url)
         repeat(30) {
             if (service.detail(admin, id, true).job?.status == JobStatus.DONE) return@repeat
             Thread.sleep(100)

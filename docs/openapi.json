@@ -581,6 +581,41 @@
         }
       }
     },
+    "/api/documents/{id}/versions/{versionId}/download" : {
+      "get" : {
+        "tags" : [ "employee-document-controller" ],
+        "operationId" : "downloadVersion",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "versionId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StreamingResponseBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/documents/{id}/status" : {
       "get" : {
         "tags" : [ "employee-document-controller" ],
@@ -601,6 +636,33 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ApiResponseJobRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/{id}/download" : {
+      "get" : {
+        "tags" : [ "employee-document-controller" ],
+        "operationId" : "download",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StreamingResponseBody"
                 }
               }
             }
@@ -896,6 +958,68 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ApiResponseMapStringBoolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/documents/{id}/versions/{versionId}/download" : {
+      "get" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "downloadVersion_1",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "versionId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StreamingResponseBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/documents/{id}/download" : {
+      "get" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "download_1",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/StreamingResponseBody"
                 }
               }
             }
@@ -1958,6 +2082,7 @@
           }
         }
       },
+      "StreamingResponseBody" : { },
       "ApiResponseJobRecord" : {
         "type" : "object",
         "properties" : {
