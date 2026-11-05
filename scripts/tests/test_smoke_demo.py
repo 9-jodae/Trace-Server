@@ -43,6 +43,25 @@ class SmokeDemoTests(unittest.TestCase):
         self.assertEqual({"public.md"}, paths_seen)
         self.assertEqual({"public"}, ids_seen)
 
+    def test_list_all_documents_follows_all_pages(self):
+        responses = [
+            {"items": [{"id": "doc-1"}], "page": 0, "size": 100, "totalElements": 3, "totalPages": 2},
+            {"items": [{"id": "doc-2"}, {"id": "doc-3"}], "page": 1, "size": 100, "totalElements": 3, "totalPages": 2},
+        ]
+        calls = []
+
+        def fake_api(session, base, method, path, token=None, json_body=None, timeout=30):
+            calls.append(path)
+            return responses[len(calls) - 1]
+
+        from unittest.mock import patch
+        with patch.object(smoke, "api", side_effect=fake_api):
+            result = smoke.list_all_documents(None, "http://localhost", "token")
+
+        self.assertEqual(["/api/documents?page=0&size=100", "/api/documents?page=1&size=100"], calls)
+        self.assertEqual(["doc-1", "doc-2", "doc-3"], [item["id"] for item in result["items"]])
+        self.assertEqual(3, result["totalElements"])
+
 
 if __name__ == "__main__":
     unittest.main()
