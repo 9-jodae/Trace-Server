@@ -16,7 +16,7 @@ docker compose -f compose.prod.yaml ps
 docker compose -f compose.prod.yaml logs --tail=100 app
 ```
 
-스크립트는 원격 변경을 가져온 뒤 브랜치를 checkout하고 fast-forward pull만 수행합니다. PostgreSQL 준비를 기다려 앱을 시작하고, 헬스체크가 2분 안에 성공하지 않으면 실패 코드로 종료합니다. 배포 이미지의 `commit`은 빌드 시 짧은 Git SHA입니다. HTTPS 적용 전에는 `http://3.0.74.114:8080/api/health`로 확인합니다. HTTPS 적용 후에는 `https://api.docs199.exijn.com/api/health`를 사용합니다. 앱은 계속 서버 loopback `127.0.0.1:18080`에 바인딩되고 Nginx가 API 경로를 제한합니다. `/actuator/health`는 상세 정보를 노출하지 않습니다.
+스크립트는 원격 변경을 가져온 뒤 브랜치를 checkout하고 fast-forward pull만 수행합니다. PostgreSQL 준비를 기다려 앱을 시작한 다음 `api-gateway`만 재시작해 Nginx가 Compose DNS에서 새 앱 컨테이너 주소를 다시 확인하도록 합니다. 기존 Nginx는 시작 시점에 `app` 주소를 캐시할 수 있어 앱 컨테이너 교체 후에는 이전 주소로 요청할 수 있습니다. 이 재시작은 Spring 앱, PostgreSQL, Neo4j를 재시작하지 않습니다. 스크립트는 앱 직접 주소(`127.0.0.1:18080`)와 게이트웨이 주소(`127.0.0.1:8080`)를 각각 검사하고, 어느 검사에서 실패했는지 구분해 종료합니다. 배포 이미지의 `commit`은 빌드 시 짧은 Git SHA입니다. HTTPS 적용 전에는 `http://3.0.74.114:8080/api/health`로 확인합니다. HTTPS 적용 후에는 `https://api.docs199.exijn.com/api/health`를 사용합니다. 앱은 계속 서버 loopback `127.0.0.1:18080`에 바인딩되고 Nginx가 API 경로를 제한합니다. `/actuator/health`는 상세 정보를 노출하지 않습니다.
 
 ## HTTPS (API 전용)
 
