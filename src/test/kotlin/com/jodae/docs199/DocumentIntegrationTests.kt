@@ -17,8 +17,14 @@ import com.jodae.docs199.domain.user.Clearance
 import com.jodae.docs199.domain.user.Position
 import com.jodae.docs199.domain.user.UserRepository
 import com.jodae.docs199.global.error.ApiException
+import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.security.UserPrincipal
 import com.jodae.docs199.global.storage.FileStorage
+import org.apache.pdfbox.pdmodel.PDDocument
+import org.apache.pdfbox.pdmodel.PDPage
+import org.apache.pdfbox.pdmodel.PDPageContentStream
+import org.apache.pdfbox.pdmodel.font.PDType1Font
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -38,6 +44,7 @@ import org.springframework.mock.web.MockMultipartFile
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.util.LinkedMultiValueMap
+import java.io.ByteArrayOutputStream
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -72,6 +79,65 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     }
 
     private fun file(text: String) = MockMultipartFile("file", "memo.md", "text/markdown", text.toByteArray())
+
+    @Test
+    fun pdfTextRevisionPreservesOriginalVersionAndRejectsStaleBase() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "pdf-edit-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val pdfBytes =
+            PDDocument().use { pdf ->
+                val page = PDPage()
+                pdf.addPage(page)
+                PDPageContentStream(pdf, page).use { stream ->
+                    stream.beginText()
+                    stream.setFont(PDType1Font(Standard14Fonts.FontName.HELVETICA), 12f)
+                    stream.newLineAtOffset(50f, 700f)
+                    stream.showText("Original text")
+                    stream.endText()
+                }
+                ByteArrayOutputStream().also(pdf::save).toByteArray()
+            }
+        val uploaded =
+            service.uploadOne(
+                admin,
+                source.id,
+                "guide.pdf",
+                MockMultipartFile("file", "guide.pdf", "application/pdf", pdfBytes),
+                null,
+                null,
+                null,
+            )
+        val id = uploaded.documentId!!
+        val original = service.editableText(admin, id)
+        assertEquals("Original text", original.text)
+        assertEquals("md", original.saveExtension)
+
+        val revised = service.reviseText(admin, id, original.versionId, "Updated text")
+        assertEquals(id, revised.documentId)
+        assertEquals(2, revised.version)
+        assertEquals("md", service.detail(admin, id, true).document.extension)
+        assertEquals("Updated text", service.editableText(admin, id).text)
+        assertEquals("pdf", repository.versions(id).last().extension)
+        val historical = service.download(admin, id, original.versionId, true)
+        assertEquals("application/pdf", historical.contentType)
+        historical.input.use { assertArrayEquals(pdfBytes, it.readBytes()) }
+
+        val error = assertThrows(ApiException::class.java) { service.reviseText(admin, id, original.versionId, "Stale text") }
+        assertEquals(ErrorCode.STALE_DOCUMENT_VERSION, error.code)
+        assertEquals(2, repository.versions(id).size)
+
+        val fileRevision =
+            service.reviseFile(
+                admin,
+                id,
+                MockMultipartFile("file", "guide.md", "text/markdown", "File revision".toByteArray()),
+                null,
+                null,
+                null,
+            )
+        assertEquals(id, fileRevision.documentId)
+        assertEquals(3, fileRevision.version)
+    }
 
     @Test
     fun streamsCurrentAndHistoricalVersionsOnlyWhenAccessible() {

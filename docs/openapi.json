@@ -234,6 +234,43 @@
         }
       }
     },
+    "/api/admin/documents/{id}/text-revision" : {
+      "post" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "reviseText",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TextRevisionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseUploadResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/documents/{id}/revisions" : {
       "post" : {
         "tags" : [ "admin-document-controller" ],
@@ -1000,6 +1037,33 @@
         }
       }
     },
+    "/api/admin/documents/{id}/editable-text" : {
+      "get" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "editableText",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseEditableTextView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/documents/{id}/download" : {
       "get" : {
         "tags" : [ "admin-document-controller" ],
@@ -1466,6 +1530,20 @@
           }
         }
       },
+      "TextRevisionRequest" : {
+        "type" : "object",
+        "properties" : {
+          "baseVersionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "text" : {
+            "type" : "string",
+            "minLength" : 1
+          }
+        },
+        "required" : [ "text" ]
+      },
       "ApiResponseUploadResult" : {
         "type" : "object",
         "properties" : {
@@ -1771,6 +1849,9 @@
           "createdAt" : {
             "type" : "string",
             "format" : "date-time"
+          },
+          "extension" : {
+            "type" : [ "string", "null" ]
           }
         }
       },
@@ -1994,6 +2075,19 @@
             "items" : {
               "$ref" : "#/components/schemas/GraphEdge"
             }
+          }
+        }
+      },
+      "GraphWarning" : {
+        "type" : "object",
+        "properties" : {
+          "type" : {
+            "type" : "string",
+            "enum" : [ "SECURITY_RISK", "CONTENT_CHECK" ]
+          },
+          "modifiedDocumentId" : {
+            "type" : [ "string", "null" ],
+            "format" : "uuid"
           }
         }
       },
@@ -2320,6 +2414,54 @@
           }
         }
       },
+      "ApiResponseEditableTextView" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/EditableTextView"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "EditableTextView" : {
+        "type" : "object",
+        "properties" : {
+          "documentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "versionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "extension" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "saveExtension" : {
+            "type" : "string"
+          }
+        }
+      },
       "ApiResponseMapStringBoolean" : {
         "type" : "object",
         "properties" : {
@@ -2338,19 +2480,6 @@
             }, {
               "type" : "null"
             } ]
-          }
-        }
-      },
-      "GraphWarning" : {
-        "type" : "object",
-        "properties" : {
-          "type" : {
-            "type" : "string",
-            "enum" : [ "SECURITY_RISK", "CONTENT_CHECK" ]
-          },
-          "modifiedDocumentId" : {
-            "type" : [ "string", "null" ],
-            "format" : "uuid"
           }
         }
       }

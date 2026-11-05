@@ -81,7 +81,7 @@ class QuestionService(
     private val client: AgentChatClient,
     private val graphRepository: GraphRepository,
     @Value("\${app.ai.known-conflicts-enabled:true}") private val knownConflictsEnabled: Boolean = true,
-    @Value("\${app.documents.allowed-extensions:pdf,md}") allowedExtensions: String = "pdf,md",
+    @Value("\${app.documents.allowed-extensions:pdf,md,txt}") allowedExtensions: String = "pdf,md,txt",
 ) {
     private val allowedExtensions =
         allowedExtensions
