@@ -98,24 +98,29 @@ class OpenApiExportTests : IntegrationTestBase() {
         }
         parameters.removeAll(movedParameters.toSet())
 
-        val requiredFields = if (path == "/api/admin/sources/{sourceId}/documents") {
-            listOf("files", "paths")
-        } else {
-            listOf("file")
-        }
+        val requiredFields =
+            if (path == "/api/admin/sources/{sourceId}/documents") {
+                listOf("files", "paths")
+            } else {
+                listOf("file")
+            }
         operation["parameters"] = parameters
-        operation["requestBody"] = mapOf(
-            "required" to true,
-            "content" to mapOf(
-                "multipart/form-data" to mapOf(
-                    "schema" to mapOf(
-                        "type" to "object",
-                        "properties" to bodyProperties,
-                        "required" to requiredFields,
+        operation["requestBody"] =
+            mapOf(
+                "required" to true,
+                "content" to
+                    mapOf(
+                        "multipart/form-data" to
+                            mapOf(
+                                "schema" to
+                                    mapOf(
+                                        "type" to "object",
+                                        "properties" to bodyProperties,
+                                        "required" to requiredFields,
+                                    ),
+                            ),
                     ),
-                ),
-            ),
-        )
+            )
     }
 
     private fun assertMultipartFields(
