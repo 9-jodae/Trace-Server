@@ -74,9 +74,22 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     fun uploadVersionJobAndExclusions() {
         val admin = principal("doc.admin@local.docs199")
         val source = service.createSource(admin, SourceKind.LOCAL, "테스트-${UUID.randomUUID()}", null, Clearance.PUBLIC)
-        val first = service.uploadOne(admin, source.id, "notes/memo.md", file("첫 내용"), null, null, null)
+        val first =
+            service.uploadOne(
+                admin,
+                source.id,
+                "notes/memo.md",
+                file("\uCCAB \uB0B4\uC6A9"),
+                null,
+                null,
+                null,
+                displayTitle = "\uCD9C\uC7A5\uBE44 \uADDC\uC815",
+            )
         assertEquals("CREATED", first.outcome)
         val id = first.documentId!!
+        assertEquals("\uCD9C\uC7A5\uBE44 \uADDC\uC815", repository.document(id)?.title)
+        val fallback = service.uploadOne(admin, source.id, "notes/plain.md", file("\uAE30\uBCF8 \uC81C\uBAA9"), null, null, null)
+        assertEquals("plain", repository.document(fallback.documentId!!)?.title)
         assertEquals(1, first.version)
         val url = service.downloadUrl(admin, id, true)
         assertTrue(url.contains("documents/"))
@@ -86,7 +99,10 @@ class DocumentIntegrationTests : IntegrationTestBase() {
             Thread.sleep(100)
         }
         assertEquals(JobStatus.DONE, service.detail(admin, id, true).job?.status)
-        assertEquals("UNCHANGED", service.uploadOne(admin, source.id, "notes/memo.md", file("첫 내용"), null, null, null).outcome)
+        assertEquals(
+            "UNCHANGED",
+            service.uploadOne(admin, source.id, "notes/memo.md", file("\uCCAB \uB0B4\uC6A9"), null, null, null).outcome,
+        )
         assertEquals(2, service.uploadOne(admin, source.id, "notes/memo.md", file("둘째 내용"), null, null, null).version)
         assertEquals(2, repository.versions(id).size)
         assertEquals("EXCLUDED", service.uploadOne(admin, source.id, ".obsidian/cache.md", file("x"), null, null, null).outcome)
@@ -300,6 +316,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
         val token = Regex("\"accessToken\":\"([^\"]+)\"").find(tokenBody)!!.groupValues[1]
         val form = LinkedMultiValueMap<String, Any>()
         form.add("paths", "folder/from-api.md")
+        form.add("titles", "API 표시 제목")
         form.add(
             "files",
             object : ByteArrayResource("API 파일".toByteArray()) {
@@ -314,6 +331,39 @@ class DocumentIntegrationTests : IntegrationTestBase() {
         val upload = rest.postForEntity("/api/admin/sources/${source.id}/documents", HttpEntity(form, headers), String::class.java)
         assertEquals(HttpStatus.OK, upload.statusCode)
         assertTrue(upload.body!!.contains("CREATED"))
+        val documentId = Regex("\"documentId\":\"([^\"]+)\"").find(upload.body!!)!!.groupValues[1]
+        listOf(listOf("one", "two"), listOf(" ")).forEach { invalidTitles ->
+            val invalidForm = LinkedMultiValueMap<String, Any>()
+            invalidForm.add("paths", "folder/invalid.md")
+            invalidTitles.forEach { invalidForm.add("titles", it) }
+            invalidForm.add(
+                "files",
+                object : ByteArrayResource("content".toByteArray()) {
+                    override fun getFilename() = "invalid.md"
+                },
+            )
+            val invalidUpload =
+                rest.postForEntity("/api/admin/sources/${source.id}/documents", HttpEntity(invalidForm, headers), String::class.java)
+            assertEquals(HttpStatus.BAD_REQUEST, invalidUpload.statusCode)
+        }
+        val readHeaders = HttpHeaders().apply { setBearerAuth(token) }
+        val detail =
+            rest.exchange(
+                "/api/admin/documents/$documentId",
+                HttpMethod.GET,
+                HttpEntity<Void>(readHeaders),
+                String::class.java,
+            )
+        assertEquals(HttpStatus.OK, detail.statusCode)
+        assertTrue(detail.body!!.contains("API 표시 제목"))
+        val adminList =
+            rest.exchange(
+                "/api/admin/documents?sourceId=${source.id}",
+                HttpMethod.GET,
+                HttpEntity<Void>(readHeaders),
+                String::class.java,
+            )
+        assertTrue(adminList.body!!.contains("API 표시 제목"))
         val hrToken =
             rest
                 .postForEntity(
