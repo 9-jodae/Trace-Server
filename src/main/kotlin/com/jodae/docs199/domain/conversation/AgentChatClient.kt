@@ -30,6 +30,14 @@ data class AgentChatRequest(
     val threadId: String?,
     val filters: SearchFilters? = null,
     val accessScope: AgentAccessScope? = null,
+    val knownConflicts: List<AgentKnownConflict>? = null,
+)
+
+data class AgentKnownConflict(
+    val relationId: UUID,
+    val documentId: UUID,
+    val otherDocumentId: UUID,
+    val item: String,
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)

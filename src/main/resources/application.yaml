@@ -41,6 +41,7 @@ app:
   ai:
     mode: ${AI_MODE:mock}
     ingestion-mode: ${AI_INGEST_MODE:${AI_MODE:mock}}
+    known-conflicts-enabled: ${AI_KNOWN_CONFLICTS_ENABLED:true}
     base-url: ${AI_BASE_URL:http://localhost:8000}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     retry-count: ${AI_RETRY_COUNT:0}

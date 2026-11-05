@@ -15,6 +15,7 @@ services:
       AWS_REGION: ${AWS_REGION:-ap-southeast-1}
       AI_MODE: ${AI_MODE:-mock}
       AI_INGEST_MODE: ${AI_INGEST_MODE:-${AI_MODE:-mock}}
+      AI_KNOWN_CONFLICTS_ENABLED: ${AI_KNOWN_CONFLICTS_ENABLED:-true}
       AI_BASE_URL: ${AI_BASE_URL:-http://ai:8000}
       DOCUMENT_REVISION_ENABLED: ${DOCUMENT_REVISION_ENABLED:-false}
     extra_hosts:
