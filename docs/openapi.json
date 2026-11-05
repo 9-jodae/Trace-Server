@@ -1,0 +1,1932 @@
+{
+  "openapi" : "3.1.0",
+  "security" : [ {
+    "bearerAuth" : [ ]
+  } ],
+  "paths" : {
+    "/api/conversations/{id}/messages" : {
+      "post" : {
+        "tags" : [ "conversation-controller" ],
+        "operationId" : "ask",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/QuestionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseQuestionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/messages" : {
+      "post" : {
+        "tags" : [ "conversation-controller" ],
+        "operationId" : "askNew",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/QuestionRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseQuestionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login" : {
+      "post" : {
+        "tags" : [ "auth-controller" ],
+        "operationId" : "login",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseMapStringString"
+                }
+              }
+            }
+          }
+        },
+        "security" : [ ]
+      }
+    },
+    "/api/admin/sources" : {
+      "get" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "sources",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseListSourceRecord"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "createSource",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SourceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseSourceRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/sources/{sourceId}/documents" : {
+      "post" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "upload",
+        "parameters" : [ {
+          "name" : "sourceId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "paths",
+          "in" : "query",
+          "required" : true,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }, {
+          "name" : "titles",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }, {
+          "name" : "clearance",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "PUBLIC", "INTERNAL", "CONFIDENTIAL" ]
+          }
+        }, {
+          "name" : "departmentIds",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "uniqueItems" : true
+          }
+        }, {
+          "name" : "minimumPosition",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "STAFF", "SENIOR", "MANAGER", "DIRECTOR" ]
+          }
+        }, {
+          "name" : "ownerDepartmentId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "author",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "authoredAt",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "sourceModifiedAt",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "files" : {
+                    "type" : "array",
+                    "items" : {
+                      "type" : "string",
+                      "format" : "binary"
+                    }
+                  }
+                },
+                "required" : [ "files" ]
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseListUploadResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/documents/{id}/revisions" : {
+      "post" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "revise",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "author",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "authoredAt",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "sourceModifiedAt",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "file" : {
+                    "type" : "string",
+                    "format" : "binary"
+                  }
+                },
+                "required" : [ "file" ]
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseUploadResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/documents/{id}/access" : {
+      "patch" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "access",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AccessRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseDetailView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me" : {
+      "get" : {
+        "tags" : [ "auth-controller" ],
+        "operationId" : "me",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseUserResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health" : {
+      "get" : {
+        "tags" : [ "health-controller" ],
+        "operationId" : "health",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/evidence/{chunkId}" : {
+      "get" : {
+        "tags" : [ "evidence-controller" ],
+        "operationId" : "evidence",
+        "parameters" : [ {
+          "name" : "chunkId",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseEvidenceResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents" : {
+      "get" : {
+        "tags" : [ "employee-document-controller" ],
+        "operationId" : "list",
+        "parameters" : [ {
+          "name" : "sourceId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "sourceKind",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "LOCAL", "OBSIDIAN", "NOTION" ]
+          }
+        }, {
+          "name" : "extension",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "documentType",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "HANDOVER", "APPROVAL", "REPORT", "PRESENTATION", "ETC" ]
+          }
+        }, {
+          "name" : "authoredFrom",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "authoredTo",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "PENDING", "PROCESSING", "DONE", "FAILED" ]
+          }
+        }, {
+          "name" : "ownerDepartmentId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponsePageResponseDocumentRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/{id}" : {
+      "get" : {
+        "tags" : [ "employee-document-controller" ],
+        "operationId" : "detail",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseDetailView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/{id}/status" : {
+      "get" : {
+        "tags" : [ "employee-document-controller" ],
+        "operationId" : "status",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseJobRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/documents/{id}/download-url" : {
+      "get" : {
+        "tags" : [ "employee-document-controller" ],
+        "operationId" : "url",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseMapStringString"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/departments" : {
+      "get" : {
+        "tags" : [ "department-controller" ],
+        "operationId" : "list_1",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseListDepartmentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations" : {
+      "get" : {
+        "tags" : [ "conversation-controller" ],
+        "operationId" : "list_2",
+        "parameters" : [ ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseListConversationRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/conversations/{id}" : {
+      "get" : {
+        "tags" : [ "conversation-controller" ],
+        "operationId" : "detail_1",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseConversationDetail"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "conversation-controller" ],
+        "operationId" : "delete",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseMapStringBoolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/ingestion-jobs/{id}" : {
+      "get" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "job",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseJobRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/documents" : {
+      "get" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "list_3",
+        "parameters" : [ {
+          "name" : "sourceId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "sourceKind",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "LOCAL", "OBSIDIAN", "NOTION" ]
+          }
+        }, {
+          "name" : "extension",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "documentType",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "HANDOVER", "APPROVAL", "REPORT", "PRESENTATION", "ETC" ]
+          }
+        }, {
+          "name" : "authoredFrom",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "authoredTo",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "PENDING", "PROCESSING", "DONE", "FAILED" ]
+          }
+        }, {
+          "name" : "ownerDepartmentId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "page",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0
+          }
+        }, {
+          "name" : "size",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponsePageResponseDocumentRecord"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/documents/{id}" : {
+      "get" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "detail_2",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseDetailView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "delete_1",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseMapStringBoolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/documents/{id}/download-url" : {
+      "get" : {
+        "tags" : [ "admin-document-controller" ],
+        "operationId" : "url_1",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseMapStringString"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "UserPrincipal" : {
+        "type" : "object",
+        "properties" : {
+          "userId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "role" : {
+            "type" : "string",
+            "enum" : [ "EMPLOYEE", "DOC_ADMIN", "SYSTEM_ADMIN" ]
+          },
+          "departmentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "position" : {
+            "type" : "string",
+            "enum" : [ "STAFF", "SENIOR", "MANAGER", "DIRECTOR" ]
+          },
+          "clearance" : {
+            "type" : "string",
+            "enum" : [ "PUBLIC", "INTERNAL", "CONFIDENTIAL" ]
+          }
+        }
+      },
+      "QuestionRequest" : {
+        "type" : "object",
+        "properties" : {
+          "message" : {
+            "type" : "string",
+            "minLength" : 1
+          },
+          "filters" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/SearchFilters"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        },
+        "required" : [ "message" ]
+      },
+      "SearchFilters" : {
+        "type" : "object",
+        "properties" : {
+          "extensions" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "documentTypes" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "sourceKinds" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "authoredFrom" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          },
+          "authoredTo" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          }
+        }
+      },
+      "ApiError" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "details" : { }
+        }
+      },
+      "ApiResponseQuestionResponse" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/QuestionResponse"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "EvidenceSourceView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "text" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "documentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "documentTitle" : {
+            "type" : "string"
+          },
+          "versionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "charStart" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "charEnd" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          }
+        }
+      },
+      "QuestionEvidenceView" : {
+        "type" : "object",
+        "properties" : {
+          "chunkId" : {
+            "type" : "string"
+          },
+          "source" : {
+            "type" : "string"
+          },
+          "documentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "versionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "quote" : {
+            "type" : "string"
+          },
+          "charStart" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "charEnd" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          }
+        }
+      },
+      "QuestionResponse" : {
+        "type" : "object",
+        "properties" : {
+          "conversationId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "answer" : {
+            "type" : "string"
+          },
+          "route" : {
+            "type" : [ "string", "null" ]
+          },
+          "contextProbability" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "sources" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EvidenceSourceView"
+            }
+          },
+          "evidence" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/QuestionEvidenceView"
+            }
+          },
+          "failedSources" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "fallbackReason" : {
+            "type" : [ "string", "null" ]
+          }
+        }
+      },
+      "LoginRequest" : {
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string",
+            "format" : "email"
+          },
+          "password" : {
+            "type" : "string",
+            "minLength" : 1
+          }
+        },
+        "required" : [ "password" ]
+      },
+      "ApiResponseMapStringString" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "type" : [ "object", "null" ],
+            "additionalProperties" : {
+              "type" : "string"
+            }
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "SourceRequest" : {
+        "type" : "object",
+        "properties" : {
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "LOCAL", "OBSIDIAN", "NOTION" ]
+          },
+          "name" : {
+            "type" : "string",
+            "minLength" : 1
+          },
+          "defaultDepartmentId" : {
+            "type" : [ "string", "null" ],
+            "format" : "uuid"
+          },
+          "defaultClearance" : {
+            "type" : "string",
+            "enum" : [ "PUBLIC", "INTERNAL", "CONFIDENTIAL" ]
+          }
+        },
+        "required" : [ "name" ]
+      },
+      "ApiResponseSourceRecord" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/SourceRecord"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "SourceRecord" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "kind" : {
+            "type" : "string",
+            "enum" : [ "LOCAL", "OBSIDIAN", "NOTION" ]
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "defaultDepartmentId" : {
+            "type" : [ "string", "null" ],
+            "format" : "uuid"
+          },
+          "defaultClearance" : {
+            "type" : "string",
+            "enum" : [ "PUBLIC", "INTERNAL", "CONFIDENTIAL" ]
+          },
+          "createdBy" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }
+      },
+      "ApiResponseListUploadResult" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "$ref" : "#/components/schemas/UploadResult"
+            }
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "UploadResult" : {
+        "type" : "object",
+        "properties" : {
+          "path" : {
+            "type" : "string"
+          },
+          "documentId" : {
+            "type" : [ "string", "null" ],
+            "format" : "uuid"
+          },
+          "version" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "outcome" : {
+            "type" : "string"
+          },
+          "reason" : {
+            "type" : [ "string", "null" ]
+          }
+        }
+      },
+      "ApiResponseUploadResult" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/UploadResult"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "AccessRequest" : {
+        "type" : "object",
+        "properties" : {
+          "clearance" : {
+            "type" : "string",
+            "enum" : [ "PUBLIC", "INTERNAL", "CONFIDENTIAL" ]
+          },
+          "departmentIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "uniqueItems" : true
+          },
+          "minimumPosition" : {
+            "type" : [ "string", "null" ],
+            "enum" : [ "STAFF", "SENIOR", "MANAGER", "DIRECTOR" ]
+          },
+          "ownerDepartmentId" : {
+            "type" : [ "string", "null" ],
+            "format" : "uuid"
+          }
+        }
+      },
+      "ApiResponseDetailView" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/DetailView"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "DetailView" : {
+        "type" : "object",
+        "properties" : {
+          "document" : {
+            "$ref" : "#/components/schemas/DocumentRecord"
+          },
+          "departmentIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "uniqueItems" : true
+          },
+          "versions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/VersionView"
+            }
+          },
+          "job" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/JobRecord"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "DocumentRecord" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "sourceId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "externalId" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "relativePath" : {
+            "type" : "string"
+          },
+          "extension" : {
+            "type" : "string"
+          },
+          "documentType" : {
+            "type" : [ "string", "null" ],
+            "enum" : [ "HANDOVER", "APPROVAL", "REPORT", "PRESENTATION", "ETC" ]
+          },
+          "author" : {
+            "type" : [ "string", "null" ]
+          },
+          "authoredAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          },
+          "clearance" : {
+            "type" : "string",
+            "enum" : [ "PUBLIC", "INTERNAL", "CONFIDENTIAL" ]
+          },
+          "minimumPosition" : {
+            "type" : [ "string", "null" ],
+            "enum" : [ "STAFF", "SENIOR", "MANAGER", "DIRECTOR" ]
+          },
+          "currentVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "deletedAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          },
+          "ownerDepartmentId" : {
+            "type" : [ "string", "null" ],
+            "format" : "uuid"
+          },
+          "sourceModifiedAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          }
+        }
+      },
+      "JobRecord" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "versionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "PENDING", "PROCESSING", "DONE", "FAILED" ]
+          },
+          "errorMessage" : {
+            "type" : [ "string", "null" ]
+          },
+          "startedAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          },
+          "finishedAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          }
+        }
+      },
+      "VersionView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "number" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "fileSize" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "contentHash" : {
+            "type" : "string"
+          },
+          "uploadedBy" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "ApiResponseUserResponse" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/UserResponse"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "UserResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "departmentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "department" : {
+            "type" : "string"
+          },
+          "position" : {
+            "type" : "string",
+            "enum" : [ "STAFF", "SENIOR", "MANAGER", "DIRECTOR" ]
+          },
+          "role" : {
+            "type" : "string",
+            "enum" : [ "EMPLOYEE", "DOC_ADMIN", "SYSTEM_ADMIN" ]
+          },
+          "clearance" : {
+            "type" : "string",
+            "enum" : [ "PUBLIC", "INTERNAL", "CONFIDENTIAL" ]
+          }
+        }
+      },
+      "ApiResponseHealthResponse" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/HealthResponse"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "HealthResponse" : {
+        "type" : "object",
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          },
+          "commit" : {
+            "type" : "string"
+          },
+          "buildTime" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "profile" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ApiResponseEvidenceResponse" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/EvidenceResponse"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "EvidenceResponse" : {
+        "type" : "object",
+        "properties" : {
+          "chunkId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "documentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "documentTitle" : {
+            "type" : "string"
+          },
+          "extension" : {
+            "type" : "string"
+          },
+          "versionId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "versionNumber" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "content" : {
+            "type" : "string"
+          },
+          "charStart" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "charEnd" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "page" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "previousChunk" : {
+            "type" : [ "string", "null" ]
+          },
+          "nextChunk" : {
+            "type" : [ "string", "null" ]
+          },
+          "downloadUrl" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ApiResponsePageResponseDocumentRecord" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/PageResponseDocumentRecord"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "PageResponseDocumentRecord" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DocumentRecord"
+            }
+          },
+          "page" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalElements" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPages" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "ApiResponseJobRecord" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/JobRecord"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "ApiResponseListDepartmentResponse" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "$ref" : "#/components/schemas/DepartmentResponse"
+            }
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "DepartmentResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ApiResponseListConversationRecord" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "$ref" : "#/components/schemas/ConversationRecord"
+            }
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "ConversationRecord" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "userId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "ApiResponseConversationDetail" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ConversationDetail"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "ConversationDetail" : {
+        "type" : "object",
+        "properties" : {
+          "conversation" : {
+            "$ref" : "#/components/schemas/ConversationRecord"
+          },
+          "messages" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ConversationMessageRecord"
+            }
+          }
+        }
+      },
+      "ConversationMessageRecord" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "conversationId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "role" : {
+            "type" : "string",
+            "enum" : [ "USER", "ASSISTANT" ]
+          },
+          "content" : {
+            "type" : "string"
+          },
+          "evidenceChunkIds" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "format" : "uuid"
+            },
+            "uniqueItems" : true
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "ApiResponseListSourceRecord" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "type" : [ "array", "null" ],
+            "items" : {
+              "$ref" : "#/components/schemas/SourceRecord"
+            }
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "ApiResponseMapStringBoolean" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "type" : [ "object", "null" ],
+            "additionalProperties" : {
+              "type" : "boolean"
+            }
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "bearerAuth" : {
+        "type" : "http",
+        "scheme" : "bearer",
+        "bearerFormat" : "JWT"
+      }
+    }
+  }
+}

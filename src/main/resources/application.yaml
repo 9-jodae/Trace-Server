@@ -46,6 +46,7 @@ app:
 spring.config.activate.on-profile: local
 springdoc.api-docs.enabled: true
 springdoc.swagger-ui.enabled: true
+springdoc.paths-to-exclude: /api/internal/**, /api/dev/**
 app.storage.type: minio
 ---
 spring.config.activate.on-profile: prod

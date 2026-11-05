@@ -70,7 +70,16 @@ Authorization: Bearer <token>
 
 ### 데모 계정
 
-로컬은 `docs/local-setup.md`, 팀 서버는 `docs/deployment.md`의 데모 계정 표를 참고하세요. 비밀번호는 이 문서에 적지 않습니다. 로컬은 고정값, 팀 서버는 팀장에게 개별로 받으세요.
+아래 네 계정은 로컬 시연에서 권한 차이를 보여주기 위한 대표 계정입니다. 로컬 계정 전체와 팀 서버 계정 정책은 `docs/local-setup.md`, `docs/deployment.md`를 참고하세요. 비밀번호는 이 문서에 적지 않습니다. 팀 서버 비밀번호는 담당자에게 개별로 받으세요.
+
+| 이메일 | 부서 | 직급 | 역할 | 보안 등급 | 연동 확인 용도 |
+| --- | --- | --- | --- | --- | --- |
+| `hr.staff@local.docs199` | 인사팀 | STAFF | EMPLOYEE | PUBLIC | 공개 문서·일반 질문 |
+| `dev.manager@local.docs199` | 개발팀 | MANAGER | EMPLOYEE | INTERNAL | 개발팀 내부 문서 |
+| `ops.director@local.docs199` | 경영지원팀 | DIRECTOR | EMPLOYEE | CONFIDENTIAL | 경영지원 기밀 문서 |
+| `doc.admin@local.docs199` | 경영지원팀 | MANAGER | DOC_ADMIN | CONFIDENTIAL | 문서 소스·업로드 관리 |
+
+부서·직급·보안 등급·역할을 함께 적용해 문서 접근을 판정합니다. `DOC_ADMIN`은 문서 관리 API 역할이며 `SYSTEM_ADMIN`과 같지 않습니다.
 
 ## 부서 목록
 
@@ -110,6 +119,17 @@ sourceModifiedAt=2026-03-01T00:00:00Z
 - 응답 `data`는 파일 순서에 맞춘 배열, 각 항목은 `{"path", "documentId", "version", "outcome", "reason"}`. `outcome`은 `CREATED`/`UPDATED`/`UNCHANGED`/`EXCLUDED`(사유는 `reason`)입니다.
 - 같은 상대 경로로 다시 올리면 새 버전(개정)이 됩니다. 전용 개정 엔드포인트도 있습니다: `POST /api/admin/documents/{id}/revisions`(`file` 하나, `author`/`authoredAt`/`sourceModifiedAt` 선택).
 - 의도한 문서 유형(`documentType`)과 표시 제목은 이 API로 입력할 수 없습니다. 유형은 AI 처리가 끝나야 채워지고, 제목은 파일명에서 그대로 파생됩니다.
+
+### 프론트에서 자주 막히는 부분
+
+- **토큰 만료:** 액세스 토큰은 발급 1시간 뒤 만료되고 갱신 토큰은 없습니다. `UNAUTHENTICATED`(401)를 받으면 로그인 API를 다시 호출해 토큰을 교체한 뒤 원래 요청을 재시도하세요.
+- **multipart 업로드:** 각 파일마다 `files`와 `paths`를 같은 순서로 반복해서 보냅니다. JSON으로 인코딩하지 말고 `multipart/form-data`를 사용하세요. 기본 파일 한도는 20 MB, 요청 전체 한도는 100 MB입니다.
+- **CORS:** 현재 기본 허용 출처는 `http://localhost:3000` 하나입니다. 다른 개발 포트나 배포 도메인에서 브라우저 호출이 차단되면 서버 `.env`의 `CORS_ORIGINS`에 프론트의 정확한 origin(스킴·호스트·포트)을 추가해야 합니다. 변경은 서버 설정 담당자에게 요청하세요.
+- **OpenAPI:** 로컬 프로필에서만 `/v3/api-docs`와 Swagger UI가 열립니다. 프론트 타입 생성용 고정 파일은 저장소의 [`openapi.json`](openapi.json)입니다. API 변경 후 아래 명령으로 파일을 갱신하세요. 산출물에 서버 주소가 없으므로 개발·시연 환경의 base URL은 앱 설정으로 전달하세요.
+
+  ```powershell
+  .\gradlew.bat test --tests com.jodae.docs199.OpenApiExportTests
+  ```
 
 ## 문서 목록·상세·다운로드
 
@@ -230,6 +250,4 @@ Authorization: Bearer <token>
 
 ## 아직 준비 중인 것
 
-- **문서 관계 그래프 API**: 문서 간 참조·유사도 그래프([Issue #15](https://github.com/9-jodae/docs199-Server/issues/15) 이후).
-
-화면 설계를 먼저 시작해도 되지만, 실제 연동은 해당 Issue가 닫힌 뒤에 가능합니다.
+- 문서 관계 그래프 API는 준비 중입니다. 계약은 [그래프 API 안내](graph-api.md)를 참고하세요.
