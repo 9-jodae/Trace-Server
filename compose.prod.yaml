@@ -16,6 +16,7 @@ services:
       AI_MODE: ${AI_MODE:-mock}
       AI_INGEST_MODE: ${AI_INGEST_MODE:-${AI_MODE:-mock}}
       AI_BASE_URL: ${AI_BASE_URL:-http://ai:8000}
+      DOCUMENT_REVISION_ENABLED: ${DOCUMENT_REVISION_ENABLED:-false}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
