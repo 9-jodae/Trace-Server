@@ -48,7 +48,7 @@ docker compose -f compose.prod.yaml config --quiet
 아래는 적용 시 사용할 명령이며, 이 문서 변경 작업에서는 운영 서버에서 실행하지 않습니다. 기존 gateway 컨테이너는 새 내부 :8081 listener를 사용하도록 한 번 재생성해야 합니다. 그동안 해당 gateway를 통과하는 HTTP 요청이 잠시 실패할 수 있지만 Spring 앱, PostgreSQL, Neo4j는 재시작하지 않습니다. 먼저 새 Nginx 설정을 검증하고 gateway만 갱신합니다. 공개 :8080은 계속 바인딩됩니다.
 
 ~~~bash
-docker run --rm --entrypoint nginx -v "$PWD/infra/nginx/gateway.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.30.6-alpine -t
+docker compose -f compose.prod.yaml run --rm --no-deps --entrypoint nginx api-gateway -t
 docker compose -f compose.prod.yaml up -d --no-deps api-gateway
 curl -fsS http://127.0.0.1:8080/api/health
 ~~~
@@ -76,7 +76,7 @@ docker compose -f compose.prod.yaml rm -f caddy
 
 ~~~bash
 docker compose -f compose.prod.yaml -f compose.https-rollback.yaml config --quiet
-docker run --rm --entrypoint nginx -v "$PWD/infra/nginx/gateway-http-only.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.30.6-alpine -t
+docker compose -f compose.prod.yaml -f compose.https-rollback.yaml run --rm --no-deps --entrypoint nginx api-gateway -t
 docker compose -f compose.prod.yaml -f compose.https-rollback.yaml up -d --no-deps api-gateway
 curl -fsS http://127.0.0.1:8080/api/health
 docker compose -f compose.prod.yaml stop caddy
