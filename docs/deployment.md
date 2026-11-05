@@ -49,7 +49,6 @@ docker compose -f compose.prod.yaml config --quiet
 
 ~~~bash
 docker run --rm --entrypoint nginx -v "$PWD/infra/nginx/gateway.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.30.6-alpine -t
-cp infra/nginx/gateway.conf "$HOME/docs199-gateway.conf.pre-https"
 docker compose -f compose.prod.yaml up -d --no-deps api-gateway
 curl -fsS http://127.0.0.1:8080/api/health
 ~~~
@@ -73,12 +72,12 @@ docker compose -f compose.prod.yaml stop caddy
 docker compose -f compose.prod.yaml rm -f caddy
 ~~~
 
-새 Nginx 설정 문제로 HTTP가 실패하면 앞에서 저장한 gateway 설정을 복원하고 gateway만 재생성합니다. 이 과정에서 짧은 API 중단이 있을 수 있습니다. 복구가 확인되면 Caddy만 중지·제거합니다. HTTPS 검증 후에도 `:8080`을 차단하거나 loopback으로 제한하지 않습니다.
+새 Nginx 설정 문제로 HTTP가 실패하면 롤백용 Compose override로 HTTP 전용 Nginx 설정을 적용합니다. 저장소 파일을 덮어쓰지 않으므로 Git 작업 트리는 깨끗하게 유지됩니다. gateway가 재생성되는 동안 짧은 API 중단이 있을 수 있습니다. 복구가 확인되면 Caddy만 중지·제거합니다. HTTPS 검증 후에도 `:8080`을 차단하거나 loopback으로 제한하지 않습니다.
 
 ~~~bash
-cp "$HOME/docs199-gateway.conf.pre-https" infra/nginx/gateway.conf
-docker run --rm --entrypoint nginx -v "$PWD/infra/nginx/gateway.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.30.6-alpine -t
-docker compose -f compose.prod.yaml up -d --no-deps api-gateway
+docker compose -f compose.prod.yaml -f compose.https-rollback.yaml config --quiet
+docker run --rm --entrypoint nginx -v "$PWD/infra/nginx/gateway-http-only.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.30.6-alpine -t
+docker compose -f compose.prod.yaml -f compose.https-rollback.yaml up -d --no-deps api-gateway
 curl -fsS http://127.0.0.1:8080/api/health
 docker compose -f compose.prod.yaml stop caddy
 docker compose -f compose.prod.yaml rm -f caddy
