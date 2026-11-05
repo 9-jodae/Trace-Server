@@ -150,7 +150,8 @@ class DocumentService(
         }
         val versionId = UUID.randomUUID()
         val key = "documents/$documentId/$versionId"
-        storage.upload(key, bytes.inputStream(), bytes.size.toLong(), file.contentType ?: "application/octet-stream")
+        // Registered before the upload call so an ambiguous outcome (e.g. the object was written but the
+        // client timed out waiting for the response) still gets cleaned up when the transaction rolls back.
         TransactionSynchronizationManager.registerSynchronization(
             object : TransactionSynchronization {
                 override fun afterCompletion(status: Int) {
@@ -168,6 +169,7 @@ class DocumentService(
                 }
             },
         )
+        storage.upload(key, bytes.inputStream(), bytes.size.toLong(), file.contentType ?: "application/octet-stream")
         repository.addVersion(
             VersionRecord(versionId, documentId, number, key, bytes.size.toLong(), hash, principal.userId, Instant.now()),
         )
