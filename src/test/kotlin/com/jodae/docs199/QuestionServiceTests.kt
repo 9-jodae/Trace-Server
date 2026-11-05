@@ -462,6 +462,9 @@ class QuestionServiceTests : IntegrationTestBase() {
         assertEquals(quote, evidence.quote)
         assertEquals(chunkStart + quoteLocalStart, evidence.charStart)
         assertEquals(chunkStart + quoteLocalStart + quote.codePointCount(0, quote.length), evidence.charEnd)
+
+        val restored = conversations.detail(hr, response.conversationId)
+        assertEquals(setOf(visibleChunkId), restored.messages[1].evidenceChunkIds)
     }
 
     @Test
