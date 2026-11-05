@@ -289,6 +289,35 @@
         }
       }
     },
+    "/api/admin/document-relations" : {
+      "post" : {
+        "tags" : [ "admin-graph-controller" ],
+        "operationId" : "register",
+        "parameters" : [ ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RelationRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseRelationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/documents/{id}/access" : {
       "patch" : {
         "tags" : [ "admin-document-controller" ],
@@ -356,6 +385,41 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ApiResponseHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/graph" : {
+      "get" : {
+        "tags" : [ "graph-controller" ],
+        "operationId" : "graph",
+        "parameters" : [ {
+          "name" : "documentId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "name" : "depth",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseGraphResponse"
                 }
               }
             }
@@ -865,6 +929,33 @@
           }
         }
       }
+    },
+    "/api/admin/document-relations/{id}" : {
+      "delete" : {
+        "tags" : [ "admin-graph-controller" ],
+        "operationId" : "delete_2",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseMapStringBoolean"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components" : {
@@ -1251,6 +1342,94 @@
           }
         }
       },
+      "ConflictDetail" : {
+        "type" : "object",
+        "properties" : {
+          "item" : {
+            "type" : "string"
+          },
+          "thisValue" : {
+            "type" : "string"
+          },
+          "otherValue" : {
+            "type" : "string"
+          }
+        }
+      },
+      "RelationRequest" : {
+        "type" : "object",
+        "properties" : {
+          "sourceDocumentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "targetDocumentId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "REFERENCES", "CONFLICTS" ]
+          },
+          "detail" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ConflictDetail"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "ApiResponseRelationResponse" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/RelationResponse"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "RelationResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "source" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "target" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "REFERENCES", "CONFLICTS" ]
+          },
+          "detail" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ConflictDetail"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
       "AccessRequest" : {
         "type" : "object",
         "properties" : {
@@ -1539,6 +1718,121 @@
           },
           "profile" : {
             "type" : "string"
+          }
+        }
+      },
+      "ApiResponseGraphResponse" : {
+        "type" : "object",
+        "properties" : {
+          "success" : {
+            "type" : "boolean"
+          },
+          "data" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/GraphResponse"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "error" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ApiError"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "GraphEdge" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "source" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "target" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "type" : {
+            "type" : "string",
+            "enum" : [ "REFERENCES", "CONFLICTS" ]
+          },
+          "label" : {
+            "type" : "string"
+          },
+          "detail" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/ConflictDetail"
+            }, {
+              "type" : "null"
+            } ]
+          }
+        }
+      },
+      "GraphNode" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "documentType" : {
+            "type" : [ "string", "null" ]
+          },
+          "ownerDepartment" : {
+            "oneOf" : [ {
+              "$ref" : "#/components/schemas/GraphOwnerDepartment"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "clearance" : {
+            "type" : "string"
+          },
+          "currentVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "versionCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "GraphOwnerDepartment" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "GraphResponse" : {
+        "type" : "object",
+        "properties" : {
+          "nodes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/GraphNode"
+            }
+          },
+          "edges" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/GraphEdge"
+            }
           }
         }
       },
