@@ -232,6 +232,7 @@ Authorization: Bearer <token>
 {
   "conversationId": "<uuid>",
   "answer": "연차 이월 한도는 5일입니다.",
+  "answerType": "ANSWER",
   "sources": [{"id": "<chunk-uuid>", "text": "...", "source": "취업규칙", "documentId": "<uuid>", "documentTitle": "취업규칙", "versionId": "<uuid>", "charStart": 120, "charEnd": 160}],
   "evidence": [{"chunkId": "<chunk-uuid>", "source": "취업규칙", "documentId": "<uuid>", "versionId": "<uuid>", "quote": "연차는 최대 5일까지 이월할 수 있다.", "charStart": 120, "charEnd": 140}],
   "keywords": [{"text": "연차 이월", "chunkId": "<chunk-uuid>"}, {"text": "최대 5일", "chunkId": "<chunk-uuid>"}],
@@ -265,3 +266,9 @@ Authorization: Bearer <token>
 ## 문서 관계 그래프
 
 문서 간 참조·충돌과 설정 시 현재 버전의 공통 주제 간선을 조회하는 그래프 API입니다. 전체 조회는 `GET /api/graph`, 특정 문서 중심 조회는 `GET /api/graph?documentId={id}&depth=1`을 사용합니다. 주제 간선은 기본 비활성화이며 서버 설정으로 켭니다. 요청·응답 형식과 접근 제어 규칙은 [그래프 API 상세 안내](graph-api.md)를 참고하세요.
+
+## 질문 응답 종류 (`answerType`, Issue #76)
+
+응답의 `answerType`은 `ANSWER`, `NO_EVIDENCE`, `CLARIFICATION`, `SMALL_TALK` 중 하나입니다. `NO_EVIDENCE`일 때만 재시도 UI를 표시하고, 나머지는 `answer`를 표시합니다. AI가 필드를 생략하면 원본 `sources`가 비었을 때 `NO_EVIDENCE`, 있으면 `ANSWER`로 추론합니다. `ANSWER`의 출처가 모두 접근 권한 필터링에서 제거되거나 AI가 보낸 출처·근거·키워드 중 하나의 목록 전체가 검증에서 제외되면 답변을 `관련 문서를 찾지 못했습니다.`로 바꾸고 `NO_EVIDENCE`를 반환합니다. AI가 선언한 유형은 이 검증을 우회하지 못합니다.
+
+대화 이력에 `answerType`을 저장하지 않습니다. 대화를 다시 열면 과거의 되묻기·일상 대화가 정확히 복원되지 않을 수 있습니다.

@@ -56,9 +56,17 @@ data class AgentKeyword(
     val chunkId: String,
 )
 
+enum class AnswerType {
+    ANSWER,
+    NO_EVIDENCE,
+    CLARIFICATION,
+    SMALL_TALK,
+}
+
 data class AgentChatResponse(
     val threadId: String,
     val answer: String,
+    val answerType: AnswerType? = null,
     val route: String? = null,
     val contextProbability: Double? = null,
     val sources: List<AgentSource> = emptyList(),

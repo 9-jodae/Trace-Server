@@ -1275,6 +1275,10 @@
           "answer" : {
             "type" : "string"
           },
+          "answerType" : {
+            "type" : "string",
+            "enum" : [ "ANSWER", "NO_EVIDENCE", "CLARIFICATION", "SMALL_TALK" ]
+          },
           "route" : {
             "type" : [ "string", "null" ]
           },
@@ -1309,7 +1313,8 @@
               "$ref" : "#/components/schemas/QuestionKeywordView"
             }
           }
-        }
+        },
+        "required" : [ "answerType" ]
       },
       "LoginRequest" : {
         "type" : "object",
