@@ -12,10 +12,19 @@ import java.time.Duration
 import java.util.UUID
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
+data class AgentAccessScope(
+    val departmentId: UUID,
+    val position: String,
+    val clearance: String,
+    val isAdmin: Boolean,
+)
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class AgentChatRequest(
     val message: String,
     val threadId: String?,
     val filters: SearchFilters? = null,
+    val accessScope: AgentAccessScope? = null,
 )
 
 data class AgentSource(

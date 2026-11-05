@@ -1,5 +1,6 @@
 package com.jodae.docs199
 
+import com.jodae.docs199.domain.conversation.AgentAccessScope
 import com.jodae.docs199.domain.conversation.AgentChatClient
 import com.jodae.docs199.domain.conversation.AgentChatRequest
 import com.jodae.docs199.domain.conversation.AgentChatResponse
@@ -47,6 +48,34 @@ class FakeAgentChatClient : AgentChatClient {
 }
 
 class AgentChatHttpTests {
+    @Test
+    fun sendsAccessScopeWithExactAiContractFields() {
+        val received = AtomicReference<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/agent/chat") { exchange ->
+            received.set(exchange.requestBody.bufferedReader().readText())
+            val reply = """{"threadId":"thread","answer":"ok"}""".toByteArray()
+            exchange.responseHeaders.set("Content-Type", "application/json")
+            exchange.sendResponseHeaders(200, reply.size.toLong())
+            exchange.responseBody.use { it.write(reply) }
+        }
+        server.start()
+        try {
+            val client = HttpAgentChatClient("http://127.0.0.1:${server.address.port}", 5, "test-secret")
+            val departmentId = UUID.randomUUID()
+            for (admin in listOf(false, true)) {
+                client.chat(AgentChatRequest("질문", "thread", accessScope = AgentAccessScope(departmentId, "MANAGER", "INTERNAL", admin)))
+                val body = received.get()
+                assertTrue(body.contains("\"departmentId\":\"$departmentId\""))
+                assertTrue(body.contains("\"position\":\"MANAGER\""))
+                assertTrue(body.contains("\"clearance\":\"INTERNAL\""))
+                assertTrue(body.contains("\"isAdmin\":$admin"))
+            }
+        } finally {
+            server.stop(0)
+        }
+    }
+
     @Test
     fun sendsFiltersAsJsonAndOmitsThemWhenAbsent() {
         val received = AtomicReference<String>()
@@ -125,6 +154,22 @@ class QuestionServiceTests : IntegrationTestBase() {
         assertEquals(filters, client.lastRequest.filters)
         service.ask(hr, null, "질문")
         assertEquals(null, client.lastRequest.filters)
+    }
+
+    @Test
+    fun accessScopeIsDerivedFromThePrincipalAndSentToTheAgent() {
+        val hr = principal("hr.staff@local.docs199")
+        val client = FakeAgentChatClient()
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+
+        service.ask(hr, null, "질문")
+
+        val scope = policy.scope(hr)
+        val sent = client.lastRequest.accessScope!!
+        assertEquals(scope.departmentId, sent.departmentId)
+        assertEquals(scope.position.name, sent.position)
+        assertEquals(scope.clearance.name, sent.clearance)
+        assertEquals(scope.isAdmin, sent.isAdmin)
     }
 
     @Test

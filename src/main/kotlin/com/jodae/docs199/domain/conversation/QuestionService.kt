@@ -83,8 +83,10 @@ class QuestionService(
                 existing
             }
         conversations.addMessage(principal, conversation.id, MessageRole.USER, message)
+        val scope = policy.scope(principal)
+        val accessScope = AgentAccessScope(scope.departmentId, scope.position.name, scope.clearance.name, scope.isAdmin)
         // AI 호출은 DB 트랜잭션 밖에서 수행한다(최대 70초, 위 두 저장은 이미 각각 커밋됨).
-        val response = client.chat(AgentChatRequest(message, conversation.id.toString(), filters))
+        val response = client.chat(AgentChatRequest(message, conversation.id.toString(), filters, accessScope))
         val visible = visibleSources(principal, response.sources)
         conversations.addMessage(
             principal,
