@@ -37,8 +37,19 @@ data class QuestionResponse(
     val route: String?,
     val contextProbability: Double?,
     val sources: List<EvidenceSourceView>,
+    val evidence: List<QuestionEvidenceView>,
     val failedSources: List<String>,
     val fallbackReason: String?,
+)
+
+data class QuestionEvidenceView(
+    val chunkId: String,
+    val source: String,
+    val documentId: UUID,
+    val versionId: UUID,
+    val quote: String,
+    val charStart: Int?,
+    val charEnd: Int?,
 )
 
 private data class VerifiedChunk(
@@ -88,6 +99,7 @@ class QuestionService(
         // AI 호출은 DB 트랜잭션 밖에서 수행한다(최대 70초, 위 두 저장은 이미 각각 커밋됨).
         val response = client.chat(AgentChatRequest(message, conversation.id.toString(), filters, accessScope))
         val visible = visibleSources(principal, response.sources)
+        val evidence = visibleEvidence(principal, response.evidence)
         conversations.addMessage(
             principal,
             conversation.id,
@@ -101,6 +113,7 @@ class QuestionService(
             response.route,
             response.contextProbability,
             visible,
+            evidence,
             response.failedSources,
             response.fallbackReason,
         )
@@ -183,5 +196,81 @@ class QuestionService(
                 },
             )
         return rows.associateBy { it.chunkId }
+    }
+
+    private fun visibleEvidence(
+        principal: UserPrincipal,
+        evidence: List<AgentEvidence>,
+    ): List<QuestionEvidenceView> {
+        val scope = policy.scope(principal)
+        val parsedIds = evidence.map { runCatching { UUID.fromString(it.chunkId) }.getOrNull() }
+        val verified = fetchVerifiedChunks(scope, parsedIds.filterNotNull().distinct())
+        return evidence
+            .mapNotNull { item ->
+                val chunkId = runCatching { UUID.fromString(item.chunkId) }.getOrNull() ?: return@mapNotNull null
+                val chunk = verified[chunkId] ?: return@mapNotNull null
+                val claimedDocumentId = item.documentId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                val claimedVersionId = item.versionId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                if ((item.documentId != null && claimedDocumentId != chunk.documentId) ||
+                    (item.versionId != null && claimedVersionId != chunk.versionId)
+                ) {
+                    return@mapNotNull null
+                }
+                if (item.quote.isEmpty() || !chunk.content.contains(item.quote)) return@mapNotNull null
+
+                val offsets = verifiedQuoteOffsets(chunk, item)
+                QuestionEvidenceView(
+                    chunkId = chunk.chunkId.toString(),
+                    source = chunk.documentTitle,
+                    documentId = chunk.documentId,
+                    versionId = chunk.versionId,
+                    quote = item.quote,
+                    charStart = offsets?.first,
+                    charEnd = offsets?.second,
+                )
+            }.take(3)
+    }
+
+    private fun verifiedQuoteOffsets(
+        chunk: VerifiedChunk,
+        evidence: AgentEvidence,
+    ): Pair<Int, Int>? {
+        val documentChunkStart = chunk.charStart ?: return null
+        val quoteLength = evidence.quote.codePointCount(0, evidence.quote.length)
+        val chunkLength = chunk.content.codePointCount(0, chunk.content.length)
+        val requestedStart = evidence.charStart
+        val requestedEnd = evidence.charEnd
+        if (requestedStart != null && requestedEnd != null) {
+            val localStart = requestedStart.toLong() - documentChunkStart
+            val localEnd = requestedEnd.toLong() - documentChunkStart
+            if (documentChunkStart >= 0 &&
+                localStart >= 0 &&
+                localEnd >= localStart &&
+                localEnd <= chunkLength &&
+                localEnd - localStart == quoteLength.toLong() &&
+                chunk.substringByCodePoints(localStart, localEnd) == evidence.quote
+            ) {
+                return requestedStart to requestedEnd
+            }
+        }
+
+        val firstUtf16Offset = chunk.content.indexOf(evidence.quote)
+        if (firstUtf16Offset < 0 || chunk.content.indexOf(evidence.quote, firstUtf16Offset + 1) >= 0) return null
+        val localStart = chunk.content.codePointCount(0, firstUtf16Offset)
+        val start = documentChunkStart.toLong() + localStart
+        val end = start + quoteLength
+        if (start !in 0..Int.MAX_VALUE.toLong() || end > Int.MAX_VALUE) return null
+        return start.toInt() to end.toInt()
+    }
+
+    private fun VerifiedChunk.substringByCodePoints(
+        start: Long,
+        end: Long,
+    ): String? {
+        val count = content.codePointCount(0, content.length)
+        if (start < 0 || end < start || end > count) return null
+        val startOffset = content.offsetByCodePoints(0, start.toInt())
+        val endOffset = content.offsetByCodePoints(0, end.toInt())
+        return content.substring(startOffset, endOffset)
     }
 }

@@ -37,12 +37,23 @@ data class AgentSource(
     val charEnd: Int? = null,
 )
 
+data class AgentEvidence(
+    val chunkId: String,
+    val source: String,
+    val documentId: String? = null,
+    val versionId: String? = null,
+    val quote: String,
+    val charStart: Int? = null,
+    val charEnd: Int? = null,
+)
+
 data class AgentChatResponse(
     val threadId: String,
     val answer: String,
     val route: String? = null,
     val contextProbability: Double? = null,
     val sources: List<AgentSource> = emptyList(),
+    val evidence: List<AgentEvidence> = emptyList(),
     val failedSources: List<String> = emptyList(),
     val fallbackReason: String? = null,
 )

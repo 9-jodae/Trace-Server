@@ -183,7 +183,7 @@ Authorization: Bearer <token>
 {"message": "연차는 며칠까지 이월할 수 있나요?"}
 ```
 
-응답 `data`: `{"conversationId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","documentTitle","versionId","charStart","charEnd"}], "failedSources", "fallbackReason"}`. `sources`는 사용자가 접근할 수 없는 문서의 출처를 제외한 목록입니다. SSE가 아닌 단건 응답이며, AI 서버 처리 시간 때문에 최대 70초까지 걸릴 수 있습니다. 다른 사람의 대화 ID로 질문하면 `NOT_FOUND`입니다. `sources[].id`는 아래 근거 조회 API의 `{chunkId}`로 그대로 씁니다.
+응답 `data`: `{"conversationId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","documentTitle","versionId","charStart","charEnd"}], "evidence": [{"chunkId","source","documentId","versionId","quote","charStart","charEnd"}], "failedSources", "fallbackReason"}`. `sources`와 `evidence`는 사용자가 접근할 수 있는 현재 버전 청크만 반환합니다. `evidence`는 최대 3개이며 검증 가능한 항목이 없으면 빈 배열입니다. `quote`는 청크 원문과 일치해야 합니다. 인용의 `charStart`/`charEnd`는 원문 전체 기준 유니코드 코드 포인트 위치이며, 검증할 수 없는 위치는 `null`입니다. 화면에서 하이라이트할 때는 JavaScript UTF-16 인덱스로 변환하고, 위치가 `null`이면 청크 단위로 표시합니다. 필드 이름은 AI·프론트 합의 전 임시입니다. SSE가 아닌 단건 응답이며, AI 서버 처리 시간 때문에 최대 70초까지 걸릴 수 있습니다. 다른 사람의 대화 ID로 질문하면 `NOT_FOUND`입니다. `sources[].id`는 아래 근거 조회 API의 `{chunkId}`로 그대로 씁니다. 자세한 검증 규칙은 [AI 서버 계약](ai-server-contract.md#핵심-인용-문구-evidence)을 참고하세요.
 
 ## 근거 조회
 
