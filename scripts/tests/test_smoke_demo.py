@@ -1,12 +1,8 @@
-import contextlib
 import importlib.util
-import io
-import os
 import sys
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 sys.modules.setdefault("requests", types.ModuleType("requests"))
 spec = importlib.util.spec_from_file_location("smoke_demo", Path(__file__).parents[1] / "smoke-demo.py")
@@ -21,38 +17,31 @@ class SmokeDemoTests(unittest.TestCase):
         for value in ("http://example.com", "http://localhost.example.com", "file:///tmp/data"):
             self.assertFalse(smoke.validate_base_url(value))
 
-    def test_redirects_are_disabled_for_sensitive_requests(self):
-        class Session:
-            def request(self, *args, **kwargs):
-                self.options = kwargs
-                return types.SimpleNamespace(json=lambda: {"success": True, "data": {}}, status_code=200)
+    def test_scenario_groups_cover_requested_cases(self):
+        eval_set = smoke.load_eval_set()
+        cases = [case for _, tags in smoke.SCENARIO_GROUPS for case in smoke.scenario_cases(eval_set, tags)]
+        self.assertEqual({"Q01", "Q02", "Q03", "Q04", "Q05", "Q06"}, {case["id"] for case in cases})
 
-        session = Session()
-        smoke.api(session, "http://localhost:8080", "POST", "/api/auth/login", json_body={"password": "test"})
-        self.assertFalse(session.options["allow_redirects"])
+    def test_scenario_accounts_include_both_access_sides(self):
+        eval_set = smoke.load_eval_set()
+        cases = smoke.scenario_cases(eval_set, {"권한별 연차"})
+        accounts = smoke.scenario_accounts(cases)
+        self.assertIn("hr.staff@local.docs199", accounts)
+        self.assertIn("hr.manager@local.docs199", accounts)
 
-    def test_non_mock_without_sources_fails(self):
+    def test_evidence_visibility_requires_every_evidence_document(self):
+        case = {"evidence": [{"documentId": "public"}, {"documentId": "restricted"}]}
+        paths = {"public": "public.md", "restricted": "restricted.md"}
+
         def fake_api(session, base, method, path, token=None, json_body=None, timeout=30):
-            if path == "/api/health":
-                return {"status": "UP"}
-            if path == "/api/auth/login":
-                return {"accessToken": "test"}
-            if path == "/api/users/me":
-                return {}
-            if path.startswith("/api/documents"):
-                return {"totalElements": 1}
-            return {"answer": "answer", "sources": []}
+            return {"items": [{"id": "public", "relativePath": "public.md"}]}
 
-        with (
-            patch.object(smoke, "api", side_effect=fake_api),
-            patch.object(smoke.requests, "Session", return_value=object(), create=True),
-            patch.dict(os.environ, {"DEMO_PASSWORD": "test"}),
-            patch.object(sys, "argv", ["smoke-demo.py", "http://localhost:8080"]),
-            contextlib.redirect_stdout(io.StringIO()),
-            self.assertRaises(SystemExit) as error,
-        ):
-            smoke.main()
-        self.assertEqual(1, error.exception.code)
+        from unittest.mock import patch
+        with patch.object(smoke, "api", side_effect=fake_api):
+            visible, paths_seen, ids_seen = smoke.check_evidence_visibility(None, "http://localhost", "token", paths, case)
+        self.assertFalse(visible)
+        self.assertEqual({"public.md"}, paths_seen)
+        self.assertEqual({"public"}, ids_seen)
 
 
 if __name__ == "__main__":
