@@ -16,34 +16,84 @@ docker compose -f compose.prod.yaml ps
 docker compose -f compose.prod.yaml logs --tail=100 app
 ```
 
-스크립트는 원격 변경을 가져온 뒤 브랜치를 checkout하고 fast-forward pull만 수행합니다. PostgreSQL 준비를 기다려 앱을 시작하고, 헬스체크가 2분 안에 성공하지 않으면 실패 코드로 종료합니다. 배포 이미지의 `commit`은 빌드 시 짧은 Git SHA입니다. 외부 확인 주소는 `http://3.0.74.114:8080/api/health`입니다. 외부 8080 포트는 `api-gateway`(nginx, `infra/nginx/gateway.conf`)가 받습니다. 앱 자체는 서버 loopback `127.0.0.1:18080`에만 바인딩되어 게이트웨이를 거치지 않는 직접 접근은 서버 밖에서 불가능합니다. `/actuator/health`는 상세 정보를 노출하지 않습니다.
+스크립트는 원격 변경을 가져온 뒤 브랜치를 checkout하고 fast-forward pull만 수행합니다. PostgreSQL 준비를 기다려 앱을 시작하고, 헬스체크가 2분 안에 성공하지 않으면 실패 코드로 종료합니다. 배포 이미지의 `commit`은 빌드 시 짧은 Git SHA입니다. HTTPS 적용 전에는 `http://3.0.74.114:8080/api/health`로 확인합니다. HTTPS 적용 후에는 `https://api.docs199.exijn.com/api/health`를 사용합니다. 앱은 계속 서버 loopback `127.0.0.1:18080`에 바인딩되고 Nginx가 API 경로를 제한합니다. `/actuator/health`는 상세 정보를 노출하지 않습니다.
+
+## HTTPS (API 전용)
+
+`compose.prod.yaml`의 Caddy가 `api.docs199.exijn.com`에 자동 HTTPS를 제공하고, 같은 Compose 네트워크에서 Nginx `api-gateway:8081`로 요청을 전달합니다. Nginx의 기존 공개 `:8080`도 유지하므로 `http://3.0.74.114:8080`과 `http://api.docs199.exijn.com:8080`은 계속 사용할 수 있습니다. Caddy가 외부에 공개하는 `:80`은 인증서 발급과 HTTPS 리다이렉트에, `:443`은 HTTPS API에 사용합니다. 프론트엔드 경로는 구성하지 않습니다.
+
+Nginx는 `:8080` 요청에 대해 `X-Forwarded-Proto`를 실제 연결 방식(`http`)으로 만들고 클라이언트가 보낸 `X-Forwarded-For`를 신뢰하지 않습니다. Caddy 전용 `:8081` 요청은 Compose 내부에서만 접근할 수 있으며, Nginx는 이 경로의 프로토콜을 `https`로 고정하고 Caddy가 정리한 클라이언트 주소를 전달합니다. 전달 호스트와 포트도 Nginx가 다시 설정하고, `X-Forwarded-Prefix`와 표준 `Forwarded` 헤더는 제거합니다. 외부에 `:8081`을 게시하지 않습니다. 기존 내부 경로 차단, 150MB 업로드 한도, 90초 응답 제한은 유지합니다.
+
+Caddy 인증서 상태와 설정은 각각 `caddy-data`, `caddy-config` named volume에 저장됩니다. Caddy는 기본 동작으로 외부에서 직접 전달된 forwarded 헤더를 신뢰하지 않습니다. AWS 보안그룹의 80·443 인바운드 허용 여부는 별도로 확인해야 하며, 이 저장소 설정은 보안그룹을 변경하지 않습니다.
+
+프론트가 Vercel에 배포되면 API 기본 주소를 `https://api.docs199.exijn.com`으로 설정하고 서버 `.env`의 `CORS_ORIGINS`에는 배포된 프론트의 정확한 origin을 추가합니다. CORS 변경은 Spring 앱 재시작이 필요하므로 HTTPS 구성과 별도로 적용합니다.
+
+### 적용 전 확인
+
+공유 서버에서 Caddy가 호스트 :80·:443을 사용하므로 작업 시간을 조율하고, 다른 컨테이너와 호스트 프로세스가 해당 포트를 사용하지 않는지 확인합니다. 포트가 사용 중이면 Caddy를 시작하지 않습니다. 현재 운영 API가 :8080을 사용 중이므로 이 바인딩을 유지합니다. 서버 작업 트리에 미커밋 변경이 있으면 checkout/pull을 진행하지 않습니다.
+
+~~~bash
+cd ~/docs199-Server
+git status --short --branch
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+sudo ss -ltnp '( sport = :80 or sport = :443 or sport = :8080 )'
+git fetch origin
+git checkout develop
+git pull --ff-only origin develop
+docker compose -f compose.prod.yaml config --quiet
+~~~
+
+### 적용 순서
+
+아래는 적용 시 사용할 명령이며, 이 문서 변경 작업에서는 운영 서버에서 실행하지 않습니다. 기존 gateway 컨테이너는 새 내부 :8081 listener를 사용하도록 한 번 재생성해야 합니다. 그동안 해당 gateway를 통과하는 HTTP 요청이 잠시 실패할 수 있지만 Spring 앱, PostgreSQL, Neo4j는 재시작하지 않습니다. 먼저 새 Nginx 설정을 검증하고 gateway만 갱신합니다. 공개 :8080은 계속 바인딩됩니다.
+
+~~~bash
+docker compose -f compose.prod.yaml run --rm --no-deps --entrypoint nginx api-gateway -t
+docker compose -f compose.prod.yaml up -d --no-deps api-gateway
+curl -fsS http://127.0.0.1:8080/api/health
+~~~
+
+그 다음 Caddy만 시작합니다. `--no-deps`로 앱·DB·Neo4j 서비스는 건드리지 않습니다. Caddy 시작은 공유 호스트 `:80`·`:443`을 점유하므로 포트 확인과 팀 조율이 끝난 뒤 수행합니다.
+
+~~~bash
+docker compose -f compose.prod.yaml up -d --no-deps caddy
+curl -fsS https://api.docs199.exijn.com/api/health
+curl -sSI http://api.docs199.exijn.com/api/health
+~~~
+
+HTTPS 헬스체크는 200과 status: UP, HTTP 요청은 HTTPS URL로의 리다이렉트를 보여야 합니다. 인증서 발급에는 도메인 DNS와 외부에서 80·443으로 들어오는 연결이 필요합니다. 성공 여부를 확인하기 전에도 기존 :8080 주소는 그대로 유지됩니다.
+
+### 롤백
+
+Caddy가 실패하면 Caddy 컨테이너만 중지하고 제거합니다. 인증서 저장 volume과 기존 서비스는 그대로 둡니다. 기존 HTTP :8080은 계속 공개 상태입니다.
+
+~~~bash
+docker compose -f compose.prod.yaml stop caddy
+docker compose -f compose.prod.yaml rm -f caddy
+~~~
+
+새 Nginx 설정 문제로 HTTP가 실패하면 롤백용 Compose override로 HTTP 전용 Nginx 설정을 적용합니다. 저장소 파일을 덮어쓰지 않으므로 Git 작업 트리는 깨끗하게 유지됩니다. gateway가 재생성되는 동안 짧은 API 중단이 있을 수 있습니다. 복구가 확인되면 Caddy만 중지·제거합니다. HTTPS 검증 후에도 `:8080`을 차단하거나 loopback으로 제한하지 않습니다.
+
+~~~bash
+docker compose -f compose.prod.yaml -f compose.https-rollback.yaml config --quiet
+docker compose -f compose.prod.yaml -f compose.https-rollback.yaml run --rm --no-deps --entrypoint nginx api-gateway -t
+docker compose -f compose.prod.yaml -f compose.https-rollback.yaml up -d --no-deps api-gateway
+curl -fsS http://127.0.0.1:8080/api/health
+docker compose -f compose.prod.yaml stop caddy
+docker compose -f compose.prod.yaml rm -f caddy
+~~~
 
 ### 외부 공개 범위
 
-| 경로 | 외부(`0.0.0.0:8080`) | 비고 |
+| 경로 | 외부 HTTP :8080 / HTTPS :443 | 비고 |
 | --- | --- | --- |
 | `GET /api/health` | 공개 | 메서드는 GET만 허용 |
-| `/api/**`(그 외 전체) | 공개 | 모든 메서드, 로그인·문서·질문 등 전체 API. 인증·권한은 Spring이 그대로 검사 |
-| `/api/internal/**` | 차단(404) | 임베딩 중계(`/api/internal/embeddings`), ingestion 콜백(`/api/internal/ingestion-jobs/{id}/result`) 포함. AI 서버는 같은 Docker 네트워크에서 `app:8080`으로 직접 호출하므로 게이트웨이와 무관하게 동작 |
-| `/api/dev/**` | 차단(404) | 데모용 토큰 발급 등 개발 전용 엔드포인트 |
-| `/actuator/**` | 차단(404) | Spring에서 `/actuator/health`만 permitAll이지만 게이트웨이에서도 막음(이중 방어) |
-| `/swagger-ui/**`, `/v3/api-docs/**` | 차단(404) | prod 프로필에서 Spring도 비활성화(이중 방어) |
-| 그 외 `/api/` 밖 경로 | 차단(404) | |
+| `/api/**` (그 외 전체) | 공개 | 인증·권한은 Spring이 검사 |
+| `/api/internal/**`, `/api/dev/**` | 차단(404) | 내부·개발 전용 API |
+| `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**` | 차단(404) | 게이트웨이 이중 방어 |
+| 그 외 경로 | 차단(404) | 프론트엔드 라우팅 없음 |
 
-업로드 용량은 nginx `client_max_body_size`를 Spring의 `MAX_UPLOAD_REQUEST_SIZE`(기본 100MB)보다 여유 있게(150MB) 설정합니다. 질문 API는 최대 70초까지 걸릴 수 있어 `proxy_read_timeout`을 90초로 둡니다.
-
-### 임베딩 중계·AI 콜백이 외부에서 막혀 있는지 확인
-
-서버 밖에서 다음이 모두 404여야 합니다(200이나 다른 응답이면 게이트웨이 설정이 새 나간 것).
-
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://3.0.74.114:8080/api/internal/embeddings -X POST
-curl -s -o /dev/null -w "%{http_code}\n" http://3.0.74.114:8080/api/internal/ingestion-jobs/00000000-0000-0000-0000-000000000000/result -X POST
-```
-
-서버 안에서는 AI 서버가 같은 Docker 네트워크로 `http://app:8080/api/internal/...`을 직접 호출하므로 위 차단과 무관하게 동작합니다. 노트북에서 임베딩 중계를 쓸 때는 `docs/ai-server-contract.md`의 SSH 터널(`127.0.0.1:18080`) 방법을 그대로 씁니다.
-
-`docker compose -f compose.prod.yaml restart app`으로 앱을 재시작합니다. 로그에는 비밀값, 토큰, 문서 내용, Presigned URL을 남기지 않습니다. PostgreSQL과 Neo4j는 호스트 `127.0.0.1`에만 포트를 열어(AI 팀원의 SSH 터널 접속용, [AI 연동 접속 안내](ai-integration-setup.md) 참고) 외부에는 노출하지 않으며 named volume을 유지합니다. AI 서버는 이번 배포에서 mock 모드입니다.
+업로드 한도는 nginx `client_max_body_size 150m`, 질문 API 제한 시간은 `proxy_read_timeout 90s`입니다. HTTPS 요청은 Caddy에서 Nginx로 전달되고 같은 제한을 적용받습니다.
 
 ## Neo4j 메모리 제한
 

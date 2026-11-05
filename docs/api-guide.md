@@ -5,7 +5,8 @@
 ## 서버 주소
 
 - 로컬: `http://localhost:8080`
-- 팀 서버: `http://3.0.74.114:8080` — `/api/` 아래 전체(로그인·부서·문서·질문·근거 조회 등)가 외부에 열려 있습니다. CORS는 서버 `.env`의 `CORS_ORIGINS`에 등록된 출처만 허용하므로, 프론트 배포 주소가 정해지면 팀장에게 전달해 등록을 요청하세요([Issue #8](https://github.com/9-jodae/docs199-Server/issues/8) 참고).
+- 팀 서버(현재 HTTP): `http://3.0.74.114:8080`, `http://api.docs199.exijn.com:8080`
+- 팀 서버(HTTPS 적용 후): `https://api.docs199.exijn.com` — HTTPS 전환이 끝나면 프론트·앱의 API 기본 주소를 이 값으로 설정합니다. CORS는 서버 `.env`의 `CORS_ORIGINS`에 등록된 출처만 허용하므로, 프론트 배포 주소가 정해지면 정확한 HTTPS origin을 서버 설정 담당자에게 전달하세요([Issue #8](https://github.com/9-jodae/docs199-Server/issues/8) 참고). 전환 중에는 HTTPS 헬스체크가 성공하기 전까지 기존 HTTP 주소를 유지합니다.
 
 ### 외부 공개 범위
 
