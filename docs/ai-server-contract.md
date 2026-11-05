@@ -34,6 +34,8 @@ AI 서버는 `POST /api/internal/ingestion-jobs/{id}/result`에 같은 공유 �
 - 요청: `{"message": "...", "threadId": "대화ID 또는 null", "filters": {...} | null, "accessScope": {"departmentId": "<uuid>", "position": "<직급>", "clearance": "<보안 등급>", "isAdmin": <bool>}}`. `threadId`는 Spring의 `conversations.id`를 그대로 씁니다. **Spring이 호출자가 그 대화의 소유자인지 먼저 확인한 뒤에만 넘기므로, AI 서버는 Spring이 보낸 `threadId`를 신뢰해도 됩니다.** `accessScope`는 호출한 사용자의 `AccessPolicy.scope(principal)` 결과(`department_id uuid, position text, clearance text, is_admin boolean`)를 그대로 담은 값으로, 아래 "청크·권한 보장 조회 함수" 절의 세 함수에 넘기는 네 인자와 이름·값이 같습니다.
 - 응답: `{"threadId", "answer", "answerType", "route", "contextProbability", "sources": [{"id","text","source","documentId","versionId","charStart","charEnd"}], "evidence": [{"chunkId","source","documentId","versionId","quote","charStart","charEnd"}], "keywords": [{"text","chunkId"}], "failedSources": [...], "fallbackReason": null|"..."}`. `sources[].documentId`로 사용자가 접근할 수 없는 문서의 출처는 Spring이 응답에서 제외합니다(`AccessPolicy`). `sources[].id`(청크 ID, UUID)는 접근 가능한 것만 `conversation_messages.evidence_chunk_ids`에 저장합니다.
 
+AI chat 응답은 DTO에 정의되지 않은 필드를 최상위 및 `sources`, `evidence`, `keywords` 항목 안에서 무시합니다. `editProposals`는 예약 필드이며 현재 Spring은 이를 전달하거나 저장하지 않고 질문 API 응답에도 포함하지 않습니다. 변경된 응답 스키마는 fixture로 역직렬화 동작을 확인했으며, 실제 AI 서버 응답 확인은 다음 배포 이후 진행해야 합니다.
+
 `AgentChatResponse.evidence`의 AI 응답 형식은 다음과 같습니다. 제안 필드명과 계약은 AI·프론트와 최종 합의 전 임시입니다.
 
 ```json
