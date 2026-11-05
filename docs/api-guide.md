@@ -265,8 +265,7 @@ Authorization: Bearer <token>
 
 ## 문서 관계 그래프
 
-문서 간 선언된 참조·충돌 관계를 조회하는 그래프 API가 구현되었습니다. 전체 조회는 `GET /api/graph`, 특정 문서 중심 조회는 `GET /api/graph?documentId={id}&depth=1`을 사용합니다. 요청·응답 형식과 접근 제어 규칙은 [그래프 API 상세 안내](graph-api.md)를 참고하세요.
-
+문서 간 참조·충돌과 설정 시 현재 버전의 공통 주제 간선을 조회하는 그래프 API입니다. 전체 조회는 `GET /api/graph`, 특정 문서 중심 조회는 `GET /api/graph?documentId={id}&depth=1`을 사용합니다. 주제 간선은 기본 비활성화이며 서버 설정으로 켭니다. 요청·응답 형식과 접근 제어 규칙은 [그래프 API 상세 안내](graph-api.md)를 참고하세요.
 
 ## 질문 응답 종류 (`answerType`, Issue #76)
 

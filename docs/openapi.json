@@ -1906,14 +1906,17 @@
           },
           "type" : {
             "type" : "string",
-            "enum" : [ "REFERENCES", "CONFLICTS" ]
+            "enum" : [ "REFERENCES", "CONFLICTS", "TOPIC" ]
           },
           "label" : {
             "type" : "string"
           },
           "detail" : {
+            "type" : "null",
             "oneOf" : [ {
               "$ref" : "#/components/schemas/ConflictDetail"
+            }, {
+              "$ref" : "#/components/schemas/TopicDetail"
             }, {
               "type" : "null"
             } ]
@@ -1978,6 +1981,17 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/GraphEdge"
+            }
+          }
+        }
+      },
+      "TopicDetail" : {
+        "type" : "object",
+        "properties" : {
+          "topics" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
             }
           }
         }
