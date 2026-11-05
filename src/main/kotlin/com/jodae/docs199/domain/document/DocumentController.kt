@@ -24,6 +24,11 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
+import org.springframework.http.ContentDisposition
+import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDate
@@ -207,6 +212,19 @@ class AdminDocumentController(
         ),
     )
 
+    @GetMapping("/documents/{id}/download")
+    fun download(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable id: UUID,
+    ): ResponseEntity<StreamingResponseBody> = stream(service.download(principal, id, null, true))
+
+    @GetMapping("/documents/{id}/versions/{versionId}/download")
+    fun downloadVersion(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable id: UUID,
+        @PathVariable versionId: UUID,
+    ): ResponseEntity<StreamingResponseBody> = stream(service.download(principal, id, versionId, true))
+
     @GetMapping("/ingestion-jobs/{id}")
     fun job(
         @CurrentUser principal: UserPrincipal,
@@ -258,11 +276,33 @@ class EmployeeDocumentController(
         ),
     )
 
+    @GetMapping("/{id}/download")
+    fun download(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable id: UUID,
+    ): ResponseEntity<StreamingResponseBody> = stream(service.download(principal, id, null, false))
+
+    @GetMapping("/{id}/versions/{versionId}/download")
+    fun downloadVersion(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable id: UUID,
+        @PathVariable versionId: UUID,
+    ): ResponseEntity<StreamingResponseBody> = stream(service.download(principal, id, versionId, false))
+
     @GetMapping("/{id}/status")
     fun status(
         @CurrentUser principal: UserPrincipal,
         @PathVariable id: UUID,
     ) = ApiResponse.ok(service.detail(principal, id, false).job)
+}
+
+private fun stream(download: DocumentDownload): ResponseEntity<StreamingResponseBody> {
+    val body = StreamingResponseBody { output -> download.input.use { it.copyTo(output) } }
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(download.contentType))
+        .contentLength(download.fileSize)
+        .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(download.fileName, Charsets.UTF_8).build().toString())
+        .body(body)
 }
 
 data class IngestionResultRequest(

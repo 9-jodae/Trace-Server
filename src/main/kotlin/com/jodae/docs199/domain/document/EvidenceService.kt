@@ -4,11 +4,9 @@ import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.security.AccessPolicy
 import com.jodae.docs199.global.security.UserPrincipal
-import com.jodae.docs199.global.storage.FileStorage
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Service
 import java.sql.ResultSet
-import java.time.Duration
 import java.util.UUID
 
 private fun ResultSet.getNullableInt(column: String): Int? {
@@ -41,7 +39,6 @@ private data class ChunkRow(
     val charEnd: Int?,
     val page: Int?,
     val versionNumber: Int,
-    val storageKey: String,
     val documentId: UUID,
     val documentTitle: String,
     val extension: String,
@@ -51,7 +48,6 @@ private data class ChunkRow(
 class EvidenceService(
     private val jdbc: JdbcTemplate,
     private val policy: AccessPolicy,
-    private val storage: FileStorage,
 ) {
     fun evidence(
         principal: UserPrincipal,
@@ -65,7 +61,7 @@ class EvidenceService(
                 .query(
                     """
                     SELECT c.id AS chunk_id, c.document_version_id, c.chunk_index, c.content, c.char_start, c.char_end, c.page,
-                           dv.version_number, dv.storage_key, d.id AS document_id, d.title, d.extension
+                           dv.version_number, d.id AS document_id, d.title, d.extension
                     FROM chunks c
                     JOIN document_versions dv ON dv.id = c.document_version_id
                     JOIN documents d ON d.id = dv.document_id
@@ -82,7 +78,6 @@ class EvidenceService(
                             rs.getNullableInt("char_end"),
                             rs.getNullableInt("page"),
                             rs.getInt("version_number"),
-                            rs.getString("storage_key"),
                             rs.getObject("document_id", UUID::class.java),
                             rs.getString("title"),
                             rs.getString("extension"),
@@ -108,7 +103,7 @@ class EvidenceService(
             row.page,
             adjacentChunk(row.documentVersionId, row.chunkIndex - 1),
             adjacentChunk(row.documentVersionId, row.chunkIndex + 1),
-            storage.presignedDownloadUrl(row.storageKey, Duration.ofMinutes(15)),
+            "/api/documents/${row.documentId}/versions/${row.documentVersionId}/download",
         )
     }
 

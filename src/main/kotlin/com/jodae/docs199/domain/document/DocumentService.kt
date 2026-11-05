@@ -19,7 +19,7 @@ import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile
 import java.security.MessageDigest
-import java.time.Duration
+import java.io.InputStream
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
@@ -37,6 +37,13 @@ data class DocumentDetail(
     val departments: Set<UUID>,
     val versions: List<VersionRecord>,
     val job: JobRecord?,
+)
+
+data class DocumentDownload(
+    val input: InputStream,
+    val fileName: String,
+    val fileSize: Long,
+    val contentType: String,
 )
 
 @Service
@@ -295,9 +302,25 @@ class DocumentService(
         id: UUID,
         admin: Boolean,
     ): String {
+        detail(principal, id, admin)
+        val basePath = if (admin) "/api/admin/documents" else "/api/documents"
+        return "$basePath/$id/download"
+    }
+
+    fun download(
+        principal: UserPrincipal,
+        id: UUID,
+        versionId: UUID?,
+        admin: Boolean,
+    ): DocumentDownload {
         val detail = detail(principal, id, admin)
-        val version = detail.versions.firstOrNull() ?: throw ApiException(ErrorCode.NOT_FOUND)
-        return storage.presignedDownloadUrl(version.storageKey, Duration.ofMinutes(15))
+        val version =
+            (if (versionId == null) detail.versions.firstOrNull() else detail.versions.firstOrNull { it.id == versionId })
+                ?: throw ApiException(ErrorCode.NOT_FOUND)
+        val extension = detail.document.extension.trim().lowercase().removePrefix(".")
+        val fileName = "${detail.document.title}.$extension"
+        val contentType = if (extension == "pdf") "application/pdf" else "application/octet-stream"
+        return DocumentDownload(storage.download(version.storageKey), fileName, version.fileSize, contentType)
     }
 
     fun job(

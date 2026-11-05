@@ -36,7 +36,6 @@ import org.springframework.mock.web.MockMultipartFile
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.util.LinkedMultiValueMap
-import java.net.URI
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -92,8 +91,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
         assertEquals("plain", repository.document(fallback.documentId!!)?.title)
         assertEquals(1, first.version)
         val url = service.downloadUrl(admin, id, true)
-        assertTrue(url.contains("documents/"))
-        assertEquals("첫 내용", URI(url).toURL().openStream().use { it.readAllBytes().decodeToString() })
+        assertEquals("/api/admin/documents/$id/download", url)
         repeat(30) {
             if (service.detail(admin, id, true).job?.status == JobStatus.DONE) return@repeat
             Thread.sleep(100)
