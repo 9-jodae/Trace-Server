@@ -2,7 +2,12 @@ package com.jodae.docs199.domain.conversation
 
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
+import com.jodae.docs199.global.security.AccessPolicy
+import com.jodae.docs199.global.security.AccessScope
 import com.jodae.docs199.global.security.UserPrincipal
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.core.PreparedStatementSetter
+import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -16,6 +21,8 @@ data class ConversationDetail(
 @Service
 class ConversationService(
     private val repository: ConversationRepository,
+    private val jdbc: JdbcTemplate,
+    private val policy: AccessPolicy,
 ) {
     @Transactional
     fun create(
@@ -35,7 +42,7 @@ class ConversationService(
         id: UUID,
     ): ConversationDetail {
         val conversation = own(principal, id)
-        return ConversationDetail(conversation, repository.messages(id))
+        return ConversationDetail(conversation, redactInaccessibleEvidence(principal, repository.messages(id)))
     }
 
     @Transactional
@@ -70,4 +77,41 @@ class ConversationService(
         if (conversation.userId != principal.userId) throw ApiException(ErrorCode.NOT_FOUND)
         return conversation
     }
+
+    // A message's evidence_chunk_ids was access-checked at ask() time, but a document referenced by an
+    // old answer may since have been deleted, revised to a new version, or had its access rules changed.
+    // Re-verify against current access on every restore so history never reveals evidence the caller can
+    // no longer see; chunks that fail the check are dropped from the set rather than failing the request.
+    private fun redactInaccessibleEvidence(
+        principal: UserPrincipal,
+        messages: List<ConversationMessageRecord>,
+    ): List<ConversationMessageRecord> {
+        val candidateIds = messages.flatMap { it.evidenceChunkIds }.distinct()
+        if (candidateIds.isEmpty()) return messages
+        val visibleIds = accessibleChunkIds(policy.scope(principal), candidateIds)
+        return messages.map { message ->
+            if (message.evidenceChunkIds.isEmpty()) {
+                message
+            } else {
+                message.copy(evidenceChunkIds = message.evidenceChunkIds.filterTo(mutableSetOf()) { it in visibleIds })
+            }
+        }
+    }
+
+    private fun accessibleChunkIds(
+        scope: AccessScope,
+        chunkIds: List<UUID>,
+    ): Set<UUID> =
+        jdbc
+            .query(
+                "SELECT * FROM filter_accessible_chunk_ids(?, ?, ?, ?, ?)",
+                PreparedStatementSetter { ps ->
+                    ps.setObject(1, scope.departmentId)
+                    ps.setString(2, scope.position.name)
+                    ps.setString(3, scope.clearance.name)
+                    ps.setBoolean(4, scope.isAdmin)
+                    ps.setArray(5, ps.connection.createArrayOf("uuid", chunkIds.toTypedArray()))
+                },
+                RowMapper { rs, _ -> rs.getObject(1, UUID::class.java) },
+            ).toSet()
 }

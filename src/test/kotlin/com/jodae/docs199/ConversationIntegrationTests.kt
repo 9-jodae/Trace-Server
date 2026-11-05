@@ -62,7 +62,9 @@ class ConversationIntegrationTests : IntegrationTestBase() {
         assertEquals(2, detail.messages.size)
         assertEquals(MessageRole.USER, detail.messages[0].role)
         assertEquals(MessageRole.ASSISTANT, detail.messages[1].role)
-        assertEquals(setOf(evidenceChunkId), detail.messages[1].evidenceChunkIds)
+        // Restored evidence must still point to a chunk that exists and is accessible now.
+        // A random/deleted chunk id is hidden to avoid exposing stale references.
+        assertTrue(detail.messages[1].evidenceChunkIds.isEmpty())
 
         service.delete(hr, conversation.id)
         assertThrows(ApiException::class.java) { service.detail(hr, conversation.id) }
@@ -136,5 +138,42 @@ class ConversationIntegrationTests : IntegrationTestBase() {
         val afterDelete =
             rest.exchange("/api/conversations/${conversation.id}", HttpMethod.GET, HttpEntity<Void>(hrHeaders), String::class.java)
         assertEquals(HttpStatus.NOT_FOUND, afterDelete.statusCode)
+    }
+
+    @Test
+    fun askingOnAnotherUsersThreadIdOverHttpReturnsNotFoundAndHidesItsExistence() {
+        val hr = principal("hr.staff@local.docs199")
+        val conversation = service.create(hr, "인사팀 전용 대화")
+
+        val devHeaders =
+            HttpHeaders().apply {
+                setBearerAuth(token("dev.manager@local.docs199"))
+                contentType = MediaType.APPLICATION_JSON
+            }
+        val response =
+            rest.exchange(
+                "/api/conversations/${conversation.id}/messages",
+                HttpMethod.POST,
+                HttpEntity("""{"message":"다른 사람 대화에 질문"}""", devHeaders),
+                String::class.java,
+            )
+
+        assertEquals(HttpStatus.NOT_FOUND, response.statusCode)
+        assertTrue(response.body!!.contains("\"success\":false"))
+        assertTrue(response.body!!.contains("\"code\":\"NOT_FOUND\""))
+
+        // A thread the caller never had access to must look the same as one that never existed.
+        val unknownId = UUID.randomUUID()
+        val onUnknownThread =
+            rest.exchange(
+                "/api/conversations/$unknownId/messages",
+                HttpMethod.POST,
+                HttpEntity("""{"message":"존재하지 않는 대화에 질문"}""", devHeaders),
+                String::class.java,
+            )
+        assertEquals(HttpStatus.NOT_FOUND, onUnknownThread.statusCode)
+
+        // The rejected question must not have been stored against the owner's conversation either.
+        assertEquals(0, service.detail(hr, conversation.id).messages.size)
     }
 }
