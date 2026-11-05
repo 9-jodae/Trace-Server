@@ -6,7 +6,9 @@ import com.jodae.docs199.domain.conversation.AgentChatResponse
 import com.jodae.docs199.domain.conversation.AgentSource
 import com.jodae.docs199.domain.conversation.ConversationRepository
 import com.jodae.docs199.domain.conversation.ConversationService
+import com.jodae.docs199.domain.conversation.HttpAgentChatClient
 import com.jodae.docs199.domain.conversation.QuestionService
+import com.jodae.docs199.domain.conversation.SearchFilters
 import com.jodae.docs199.domain.document.DocumentRepository
 import com.jodae.docs199.domain.document.DocumentService
 import com.jodae.docs199.domain.document.SourceKind
@@ -15,14 +17,23 @@ import com.jodae.docs199.domain.user.UserRepository
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.security.AccessPolicy
 import com.jodae.docs199.global.security.UserPrincipal
+import com.sun.net.httpserver.HttpServer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.resttestclient.TestRestTemplate
+import org.springframework.http.HttpEntity
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.mock.web.MockMultipartFile
+import java.net.InetSocketAddress
+import java.time.LocalDate
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicReference
 
 class FakeAgentChatClient : AgentChatClient {
     var nextSources: List<AgentSource> = emptyList()
@@ -35,7 +46,37 @@ class FakeAgentChatClient : AgentChatClient {
     }
 }
 
+class AgentChatHttpTests {
+    @Test
+    fun sendsFiltersAsJsonAndOmitsThemWhenAbsent() {
+        val received = AtomicReference<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/agent/chat") { exchange ->
+            received.set(exchange.requestBody.bufferedReader().readText())
+            val reply = """{"threadId":"thread","answer":"ok"}""".toByteArray()
+            exchange.responseHeaders.set("Content-Type", "application/json")
+            exchange.sendResponseHeaders(200, reply.size.toLong())
+            exchange.responseBody.use { it.write(reply) }
+        }
+        server.start()
+        try {
+            val client = HttpAgentChatClient("http://127.0.0.1:${server.address.port}", 5, "test-secret")
+            client.chat(
+                AgentChatRequest("질문", "thread", SearchFilters(extensions = listOf("pdf"), authoredFrom = LocalDate.of(2026, 1, 1))),
+            )
+            assertTrue(received.get().contains("\"extensions\":[\"pdf\"]"))
+            assertTrue(received.get().contains("\"authoredFrom\":\"2026-01-01\""))
+            client.chat(AgentChatRequest("질문", "thread"))
+            assertTrue(!received.get().contains("\"filters\""))
+        } finally {
+            server.stop(0)
+        }
+    }
+}
+
 class QuestionServiceTests : IntegrationTestBase() {
+    @Autowired lateinit var rest: TestRestTemplate
+
     @Autowired lateinit var conversations: ConversationService
 
     @Autowired lateinit var conversationRepository: ConversationRepository
@@ -71,6 +112,48 @@ class QuestionServiceTests : IntegrationTestBase() {
             content,
         )
         return id
+    }
+
+    @Test
+    fun validFiltersAreForwardedAndOmittedFiltersRemainOptional() {
+        val hr = principal("hr.staff@local.docs199")
+        val client = FakeAgentChatClient()
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+        val filters =
+            SearchFilters(listOf("pdf", "md"), listOf("REPORT"), listOf("LOCAL"), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31))
+        service.ask(hr, null, "질문", filters)
+        assertEquals(filters, client.lastRequest.filters)
+        service.ask(hr, null, "질문")
+        assertEquals(null, client.lastRequest.filters)
+    }
+
+    @Test
+    fun invalidFilterValuesReturnBadRequestBeforeCreatingConversation() {
+        val headers = HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON }
+        val login =
+            rest.postForEntity(
+                "/api/auth/login",
+                HttpEntity("""{"email":"hr.staff@local.docs199","password":"local-demo-1234"}""", headers),
+                String::class.java,
+            )
+        val token = Regex("\\\"accessToken\\\":\\\"([^\\\"]+)\\\"").find(login.body!!)!!.groupValues[1]
+        headers.setBearerAuth(token)
+        listOf(
+            """{"extensions":["exe"]}""",
+            """{"extensions":[]}""",
+            """{"documentTypes":["UNKNOWN"]}""",
+            """{"sourceKinds":["UPLOAD"]}""",
+            """{"authoredFrom":"2026-12-31","authoredTo":"2026-01-01"}""",
+            """{"authoredFrom":"not-a-date"}""",
+        ).forEach { filters ->
+            val response =
+                rest.postForEntity(
+                    "/api/conversations/messages",
+                    HttpEntity("""{"message":"질문","filters":$filters}""", headers),
+                    String::class.java,
+                )
+            assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
+        }
     }
 
     @Test

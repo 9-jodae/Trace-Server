@@ -1,10 +1,13 @@
 package com.jodae.docs199.domain.conversation
 
+import com.jodae.docs199.domain.document.DocumentType
+import com.jodae.docs199.domain.document.SourceKind
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.security.AccessPolicy
 import com.jodae.docs199.global.security.AccessScope
 import com.jodae.docs199.global.security.UserPrincipal
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.PreparedStatementSetter
 import org.springframework.jdbc.core.RowMapper
@@ -55,12 +58,22 @@ class QuestionService(
     private val jdbc: JdbcTemplate,
     private val policy: AccessPolicy,
     private val client: AgentChatClient,
+    @Value("\${app.documents.allowed-extensions:pdf,md}") allowedExtensions: String = "pdf,md",
 ) {
+    private val allowedExtensions =
+        allowedExtensions
+            .split(',')
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+
     fun ask(
         principal: UserPrincipal,
         conversationId: UUID?,
         message: String,
+        filters: SearchFilters? = null,
     ): QuestionResponse {
+        validateFilters(filters)
         val conversation =
             if (conversationId == null) {
                 conversations.create(principal, message.take(80))
@@ -71,7 +84,7 @@ class QuestionService(
             }
         conversations.addMessage(principal, conversation.id, MessageRole.USER, message)
         // AI 호출은 DB 트랜잭션 밖에서 수행한다(최대 70초, 위 두 저장은 이미 각각 커밋됨).
-        val response = client.chat(AgentChatRequest(message, conversation.id.toString()))
+        val response = client.chat(AgentChatRequest(message, conversation.id.toString(), filters))
         val visible = visibleSources(principal, response.sources)
         conversations.addMessage(
             principal,
@@ -89,6 +102,22 @@ class QuestionService(
             response.failedSources,
             response.fallbackReason,
         )
+    }
+
+    private fun validateFilters(filters: SearchFilters?) {
+        if (filters == null) return
+
+        fun valid(
+            values: List<String>?,
+            allowed: Set<String>,
+        ) = values == null || (values.isNotEmpty() && values.all { it in allowed })
+        if (!valid(filters.extensions, allowedExtensions) ||
+            !valid(filters.documentTypes, DocumentType.entries.map { it.name }.toSet()) ||
+            !valid(filters.sourceKinds, SourceKind.entries.map { it.name }.toSet()) ||
+            (filters.authoredFrom != null && filters.authoredTo != null && filters.authoredFrom > filters.authoredTo)
+        ) {
+            throw ApiException(ErrorCode.INVALID_INPUT)
+        }
     }
 
     // AI 응답의 documentId/text는 네트워크 경계를 넘어온 값이라 신뢰하지 않는다. source.id(청크 ID)만
