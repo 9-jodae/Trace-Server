@@ -13,7 +13,10 @@ services:
       DB_USER: docs199
       STORAGE_TYPE: s3
       AWS_REGION: ${AWS_REGION:-ap-southeast-1}
-      AI_MODE: mock
+      AI_MODE: ${AI_MODE:-mock}
+      AI_BASE_URL: ${AI_BASE_URL:-http://ai:8000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:18080:8080"
     depends_on:
@@ -71,7 +74,7 @@ services:
   # AI server: uncomment once its image is published and the ingest/query contract (Issue #14) is confirmed.
   # ai:
   #   build:
-  #     context: ../docs199-AI
+  #     context: ../docs199-AI-v2
   #   environment:
   #     DB_URL: jdbc:postgresql://postgres:5432/docs199
   #     AI_DB_USER: ai_app
