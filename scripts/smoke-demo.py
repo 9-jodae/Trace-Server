@@ -8,6 +8,7 @@
 import argparse
 import os
 import sys
+import urllib.parse
 
 import requests
 
@@ -56,6 +57,10 @@ def main():
     parser.add_argument("base_url", help="서버 주소 (예: http://localhost:8080)")
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
+    parsed = urllib.parse.urlparse(base)
+    if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}):
+        print("오류: 비밀번호 보호를 위해 HTTPS 또는 localhost URL만 허용합니다.", file=sys.stderr)
+        sys.exit(1)
     password = os.environ.get("DEMO_PASSWORD")
     if not password:
         print("오류: 환경 변수 DEMO_PASSWORD가 필요합니다.", file=sys.stderr)
@@ -131,6 +136,9 @@ def main():
                     except Exception as error:
                         rows.append((f"{label} 근거조회", f"실패 ({type(error).__name__})"))
                         failures.append(f"{label} 근거조회: {error}")
+                elif not is_mock:
+                    # mock이 아닌 실답변인데 출처가 없으면 검색·인용 경로가 고장난 것이므로 실패로 기록한다.
+                    failures.append(f"{label}: 실답변인데 출처가 없어 근거 조회를 점검하지 못함")
             except Exception as error:
                 rows.append((label, f"실패 ({type(error).__name__})"))
                 failures.append(f"{label}: {error}")
