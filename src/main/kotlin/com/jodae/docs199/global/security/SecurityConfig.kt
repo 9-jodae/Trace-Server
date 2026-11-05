@@ -3,6 +3,7 @@ package com.jodae.docs199.global.security
 import com.jodae.docs199.domain.user.Clearance
 import com.jodae.docs199.domain.user.Position
 import com.jodae.docs199.domain.user.Role
+import com.jodae.docs199.domain.user.UserRepository
 import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.response.ApiResponse
 import com.nimbusds.jose.jwk.source.ImmutableSecret
@@ -18,6 +19,8 @@ import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException
+import org.springframework.security.oauth2.core.OAuth2Error
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtEncoder
@@ -82,6 +85,7 @@ class SecurityConfig(
     @Value("\${app.jwt-secret}") private val secret: String,
     @Value("\${app.cors-origins}") private val origins: String,
     private val mapper: ObjectMapper,
+    private val users: UserRepository,
 ) {
     @Bean
     fun accessPolicy(): AccessPolicy = DefaultAccessPolicy()
@@ -111,7 +115,12 @@ class SecurityConfig(
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain {
         val converter = JwtAuthenticationConverter()
-        converter.setJwtGrantedAuthoritiesConverter { jwt -> listOf(SimpleGrantedAuthority("ROLE_${jwt.getClaimAsString("role")}")) }
+        converter.setJwtGrantedAuthoritiesConverter { jwt ->
+            val invalidToken = { OAuth2AuthenticationException(OAuth2Error("invalid_token")) }
+            val userId = runCatching { java.util.UUID.fromString(jwt.subject) }.getOrElse { throw invalidToken() }
+            val user = users.findById(userId).orElseThrow { invalidToken() }
+            listOf(SimpleGrantedAuthority("ROLE_${user.role.name}"))
+        }
         http
             .csrf { it.disable() }
             .cors(Customizer.withDefaults())

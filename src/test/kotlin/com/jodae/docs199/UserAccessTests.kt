@@ -1,8 +1,13 @@
 package com.jodae.docs199
 
 import com.jodae.docs199.domain.user.Clearance
+import com.jodae.docs199.domain.user.Department
+import com.jodae.docs199.domain.user.DepartmentRepository
 import com.jodae.docs199.domain.user.Position
 import com.jodae.docs199.domain.user.Role
+import com.jodae.docs199.domain.user.TokenService
+import com.jodae.docs199.domain.user.User
+import com.jodae.docs199.domain.user.UserRepository
 import com.jodae.docs199.global.security.DefaultAccessPolicy
 import com.jodae.docs199.global.security.DocumentAccessRule
 import com.jodae.docs199.global.security.UserPrincipal
@@ -17,6 +22,7 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import java.util.UUID
 
 class AccessPolicyTests {
@@ -111,5 +117,81 @@ class DepartmentIntegrationTests : IntegrationTestBase() {
             assertTrue(me.body!!.contains("MANAGER"))
             assertTrue(me.body!!.contains("CONFIDENTIAL"))
         }
+    }
+}
+
+class JwtPrivilegeFreshnessTests : IntegrationTestBase() {
+    @Autowired lateinit var rest: TestRestTemplate
+
+    @Autowired lateinit var departments: DepartmentRepository
+
+    @Autowired lateinit var users: UserRepository
+
+    @Autowired lateinit var tokens: TokenService
+
+    @Autowired lateinit var jdbc: JdbcTemplate
+
+    @Test
+    fun existingTokenUsesCurrentRoleDepartmentPositionAndClearance() {
+        val suffix = UUID.randomUUID().toString()
+        val oldDepartment = departments.save(Department(name = "이전 부서 $suffix"))
+        val newDepartment = departments.save(Department(name = "변경 부서 $suffix"))
+        val user =
+            users.save(
+                User(
+                    email = "jwt-freshness-$suffix@local.docs199",
+                    passwordHash = "unused",
+                    name = "권한 변경 테스트",
+                    department = oldDepartment,
+                    position = Position.DIRECTOR,
+                    role = Role.SYSTEM_ADMIN,
+                    clearance = Clearance.CONFIDENTIAL,
+                ),
+            )
+        val token = tokens.issue(user).getValue("accessToken")
+
+        jdbc.update(
+            "UPDATE users SET role = ?, department_id = ?, position = ?, clearance = ? WHERE id = ?",
+            Role.EMPLOYEE.name,
+            newDepartment.id,
+            Position.STAFF.name,
+            Clearance.PUBLIC.name,
+            user.id,
+        )
+
+        val headers = HttpHeaders().apply { setBearerAuth(token) }
+        val current = rest.exchange("/api/dev/me", HttpMethod.GET, HttpEntity<Void>(headers), String::class.java)
+        assertEquals(HttpStatus.OK, current.statusCode)
+        assertTrue(current.body!!.contains("\"role\":\"EMPLOYEE\""))
+        assertTrue(current.body!!.contains("\"departmentId\":\"${newDepartment.id}\""))
+        assertTrue(current.body!!.contains("\"position\":\"STAFF\""))
+        assertTrue(current.body!!.contains("\"clearance\":\"PUBLIC\""))
+
+        val adminRequest = rest.exchange("/api/admin/sources", HttpMethod.GET, HttpEntity<Void>(headers), String::class.java)
+        assertEquals(HttpStatus.FORBIDDEN, adminRequest.statusCode)
+    }
+
+    @Test
+    fun deletedUserTokenIsRejectedDuringAuthentication() {
+        val suffix = UUID.randomUUID().toString()
+        val department = departments.save(Department(name = "삭제 테스트 부서 $suffix"))
+        val user =
+            users.save(
+                User(
+                    email = "jwt-deleted-$suffix@local.docs199",
+                    passwordHash = "unused",
+                    name = "삭제 테스트 사용자",
+                    department = department,
+                    position = Position.STAFF,
+                    role = Role.SYSTEM_ADMIN,
+                    clearance = Clearance.PUBLIC,
+                ),
+            )
+        val token = tokens.issue(user).getValue("accessToken")
+        jdbc.update("DELETE FROM users WHERE id = ?", user.id)
+
+        val headers = HttpHeaders().apply { setBearerAuth(token) }
+        val response = rest.exchange("/api/admin/sources", HttpMethod.GET, HttpEntity<Void>(headers), String::class.java)
+        assertEquals(HttpStatus.UNAUTHORIZED, response.statusCode)
     }
 }
