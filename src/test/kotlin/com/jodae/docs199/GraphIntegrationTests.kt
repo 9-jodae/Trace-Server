@@ -5,6 +5,7 @@ import com.jodae.docs199.domain.document.SourceKind
 import com.jodae.docs199.domain.graph.ConflictDetail
 import com.jodae.docs199.domain.graph.DeclaredRelationType
 import com.jodae.docs199.domain.graph.GraphService
+import com.jodae.docs199.domain.graph.GraphWarningType
 import com.jodae.docs199.domain.graph.RelationRequest
 import com.jodae.docs199.domain.graph.RelationType
 import com.jodae.docs199.domain.graph.TopicDetail
@@ -341,6 +342,69 @@ class GraphIntegrationTests : IntegrationTestBase() {
         assertThrows(ApiException::class.java) { graph.graph(hr, hidden, 1) }
         assertThrows(ApiException::class.java) { graph.graph(hr, visible, 0) }
         assertThrows(ApiException::class.java) { graph.graph(hr, null, 1) }
+    }
+
+    @Test
+    fun referencesEdgesExposeSecurityAndContentWarningsOnlyWhenApplicable() {
+        val admin = principal("system.admin@local.docs199")
+        val hr = principal("hr.staff@local.docs199")
+        val source = documents.createSource(admin, SourceKind.LOCAL, "warnings-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val lower = createDocument(admin, source.id, "warning-low-${UUID.randomUUID()}", Clearance.PUBLIC)
+        val higher = createDocument(admin, source.id, "warning-high-${UUID.randomUUID()}", Clearance.CONFIDENTIAL)
+        val equal = createDocument(admin, source.id, "warning-equal-${UUID.randomUUID()}", Clearance.PUBLIC)
+        graph.register(admin, RelationRequest(lower, higher, DeclaredRelationType.REFERENCES))
+        graph.register(admin, RelationRequest(equal, lower, DeclaredRelationType.REFERENCES))
+
+        jdbc.update(
+            "UPDATE document_versions SET created_at = CASE WHEN document_id = ? THEN TIMESTAMP '2025-01-01 00:00:00' ELSE TIMESTAMP '2025-01-01 00:00:00' END WHERE document_id IN (?, ?)",
+            lower,
+            lower,
+            higher,
+        )
+        val allEdges = graph.graph(admin, null, null).edges
+        val securityEdge =
+            allEdges
+                .single { it.source == lower && it.target == higher }
+        assertEquals(listOf(GraphWarningType.SECURITY_RISK), securityEdge.warnings.map { it.type })
+
+        jdbc.update("UPDATE document_versions SET created_at = TIMESTAMP '2025-01-01 00:00:00' WHERE document_id = ?", lower)
+        jdbc.update("UPDATE document_versions SET created_at = TIMESTAMP '2025-01-02 00:00:00' WHERE document_id = ?", higher)
+        val contentWarning =
+            graph
+                .graph(admin, null, null)
+                .edges
+                .single { it.source == lower && it.target == higher }
+                .warnings
+        assertEquals(listOf(GraphWarningType.SECURITY_RISK, GraphWarningType.CONTENT_CHECK), contentWarning.map { it.type })
+        assertEquals(higher, contentWarning.last().modifiedDocumentId)
+
+        assertTrue(graph.graph(hr, null, null).edges.none { it.source == lower && it.target == higher })
+        jdbc.update("UPDATE documents SET clearance = 'PUBLIC' WHERE id = ?", higher)
+        jdbc.update("UPDATE document_versions SET created_at = TIMESTAMP '2025-01-01 00:00:00' WHERE document_id = ?", higher)
+        val equalCase =
+            graph
+                .graph(admin, null, null)
+                .edges
+                .single { it.source == lower && it.target == higher }
+        assertTrue(equalCase.warnings.isEmpty())
+    }
+
+    @Test
+    fun nonReferenceEdgesKeepEmptyWarnings() {
+        val admin = principal("system.admin@local.docs199")
+        val source = documents.createSource(admin, SourceKind.LOCAL, "warning-types-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val first = createDocument(admin, source.id, "warning-types-a-${UUID.randomUUID()}")
+        val second = createDocument(admin, source.id, "warning-types-b-${UUID.randomUUID()}")
+        graph.register(admin, RelationRequest(first, second, DeclaredRelationType.CONFLICTS, ConflictDetail("item", "a", "b")))
+        addTopic(first, "shared-warning-topic")
+        addTopic(second, "shared-warning-topic")
+
+        val edges = graph.graph(admin, null, null).edges.filter { setOf(it.source, it.target) == setOf(first, second) }
+        assertTrue(
+            edges
+                .filter { it.type == RelationType.CONFLICTS || it.type == RelationType.TOPIC }
+                .all { it.warnings.isEmpty() },
+        )
     }
 
     @Test

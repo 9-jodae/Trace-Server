@@ -1,5 +1,6 @@
 package com.jodae.docs199.domain.graph
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import io.swagger.v3.oas.annotations.media.Schema
 import tools.jackson.databind.ObjectMapper
 import java.util.UUID
@@ -50,6 +51,16 @@ data class GraphEdge(
     val label: String,
     @field:Schema(oneOf = [ConflictDetail::class, TopicDetail::class], nullable = true)
     val detail: Any?,
+    val warnings: List<GraphWarning> = emptyList(),
+)
+
+enum class GraphWarningType { SECURITY_RISK, CONTENT_CHECK }
+
+data class GraphWarning(
+    val type: GraphWarningType,
+    @field:JsonInclude(JsonInclude.Include.NON_NULL)
+    @field:Schema(nullable = true)
+    val modifiedDocumentId: UUID? = null,
 )
 
 data class TopicDetail(
