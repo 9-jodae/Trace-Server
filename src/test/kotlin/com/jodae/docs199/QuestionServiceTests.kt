@@ -1,5 +1,8 @@
 package com.jodae.docs199
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.jodae.docs199.domain.conversation.AgentAccessScope
 import com.jodae.docs199.domain.conversation.AgentChatClient
 import com.jodae.docs199.domain.conversation.AgentChatRequest
@@ -9,6 +12,7 @@ import com.jodae.docs199.domain.conversation.AgentSource
 import com.jodae.docs199.domain.conversation.ConversationRepository
 import com.jodae.docs199.domain.conversation.ConversationService
 import com.jodae.docs199.domain.conversation.HttpAgentChatClient
+import com.jodae.docs199.domain.conversation.MessageRole
 import com.jodae.docs199.domain.conversation.QuestionService
 import com.jodae.docs199.domain.conversation.SearchFilters
 import com.jodae.docs199.domain.document.DocumentRepository
@@ -17,6 +21,7 @@ import com.jodae.docs199.domain.document.SourceKind
 import com.jodae.docs199.domain.user.Clearance
 import com.jodae.docs199.domain.user.UserRepository
 import com.jodae.docs199.global.error.ApiException
+import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.security.AccessPolicy
 import com.jodae.docs199.global.security.UserPrincipal
 import com.sun.net.httpserver.HttpServer
@@ -24,6 +29,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.resttestclient.TestRestTemplate
 import org.springframework.http.HttpEntity
@@ -36,15 +43,18 @@ import java.net.InetSocketAddress
 import java.time.LocalDate
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.system.measureTimeMillis
 
 class FakeAgentChatClient : AgentChatClient {
     var nextSources: List<AgentSource> = emptyList()
     var nextEvidence: List<AgentEvidence> = emptyList()
     var nextAnswer: String = "답변"
+    var failWith: ApiException? = null
     lateinit var lastRequest: AgentChatRequest
 
     override fun chat(request: AgentChatRequest): AgentChatResponse {
         lastRequest = request
+        failWith?.let { throw it }
         return AgentChatResponse(
             threadId = request.threadId ?: UUID.randomUUID().toString(),
             answer = nextAnswer,
@@ -113,6 +123,74 @@ class AgentChatHttpTests {
             client.chat(AgentChatRequest("질문", "thread"))
             assertTrue(!received.get().contains("\"filters\""))
         } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun propagatesTheCurrentRequestIdToTheAiServer() {
+        val receivedHeader = AtomicReference<String?>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/agent/chat") { exchange ->
+            receivedHeader.set(exchange.requestHeaders.getFirst("X-Request-Id"))
+            val reply = """{"threadId":"thread","answer":"ok"}""".toByteArray()
+            exchange.responseHeaders.set("Content-Type", "application/json")
+            exchange.sendResponseHeaders(200, reply.size.toLong())
+            exchange.responseBody.use { it.write(reply) }
+        }
+        server.start()
+        try {
+            MDC.put("requestId", "test-request-id-123")
+            val client = HttpAgentChatClient("http://127.0.0.1:${server.address.port}", 5, "test-secret")
+            client.chat(AgentChatRequest("질문", "thread"))
+            assertEquals("test-request-id-123", receivedHeader.get())
+        } finally {
+            MDC.remove("requestId")
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun timesOutWithinTheConfiguredBudgetInsteadOfHanging() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/agent/chat") { exchange ->
+            Thread.sleep(3000)
+            exchange.sendResponseHeaders(200, -1)
+        }
+        server.start()
+        try {
+            val client = HttpAgentChatClient("http://127.0.0.1:${server.address.port}", 1, "test-secret")
+            val elapsed =
+                measureTimeMillis {
+                    val error = assertThrows(ApiException::class.java) { client.chat(AgentChatRequest("질문", "thread")) }
+                    assertEquals(ErrorCode.AI_UNAVAILABLE, error.code)
+                }
+            assertTrue(elapsed < 3000, "타임아웃이 설정된 1초를 크게 넘겨 요청이 걸려 있었습니다: ${elapsed}ms")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun logsAiFailureWithoutQuestionContent() {
+        val logger = LoggerFactory.getLogger(HttpAgentChatClient::class.java) as Logger
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        logger.addAppender(appender)
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/agent/chat") { exchange ->
+            exchange.sendResponseHeaders(500, -1)
+            exchange.close()
+        }
+        server.start()
+        try {
+            val client = HttpAgentChatClient("http://127.0.0.1:${server.address.port}", 5, "test-secret")
+            assertThrows(ApiException::class.java) { client.chat(AgentChatRequest("비밀 질문 내용입니다", "thread")) }
+            val messages = appender.list.map { it.formattedMessage }
+            assertTrue(messages.any { it.contains("AI 채팅 호출 실패") })
+            assertTrue(messages.none { it.contains("비밀 질문 내용입니다") })
+        } finally {
+            logger.detachAppender(appender)
+            appender.stop()
             server.stop(0)
         }
     }
@@ -236,12 +314,14 @@ class QuestionServiceTests : IntegrationTestBase() {
         val hiddenChunkId = insertChunk(documents.currentVersion(hiddenId)!!.id, "기밀 연봉 정보")
 
         val client = FakeAgentChatClient()
+        val evidenceChunkId = insertChunk(documents.currentVersion(visibleId)!!.id, "이차 근거 문구", 1)
         client.nextAnswer = "연차는 5일까지 이월할 수 있습니다"
         client.nextSources =
             listOf(
                 AgentSource(visibleChunkId.toString(), "본문1", "공개 문서", visibleId.toString()),
                 AgentSource(hiddenChunkId.toString(), "본문2", "기밀 문서", hiddenId.toString()),
             )
+        client.nextEvidence = listOf(AgentEvidence(evidenceChunkId.toString(), "source", quote = "이차 근거"))
         val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
 
         val response = service.ask(hr, null, "연차는 며칠까지 이월되나요?")
@@ -253,7 +333,7 @@ class QuestionServiceTests : IntegrationTestBase() {
 
         val detail = conversations.detail(hr, response.conversationId)
         assertEquals(2, detail.messages.size)
-        assertEquals(setOf(visibleChunkId), detail.messages[1].evidenceChunkIds)
+        assertEquals(setOf(visibleChunkId, evidenceChunkId), detail.messages[1].evidenceChunkIds)
     }
 
     @Test
@@ -423,6 +503,30 @@ class QuestionServiceTests : IntegrationTestBase() {
     }
 
     @Test
+    fun aiFailureDoesNotLoseTheAlreadyStoredUserMessage() {
+        val hr = principal("hr.staff@local.docs199")
+        val client = FakeAgentChatClient()
+        client.failWith = ApiException(ErrorCode.AI_UNAVAILABLE)
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+
+        val error = assertThrows(ApiException::class.java) { service.ask(hr, null, "AI가 응답하지 않을 때 질문") }
+        assertEquals(ErrorCode.AI_UNAVAILABLE, error.code)
+
+        val conversationId = UUID.fromString(client.lastRequest.threadId)
+        val detail = conversations.detail(hr, conversationId)
+        assertEquals(1, detail.messages.size)
+        assertEquals(MessageRole.USER, detail.messages[0].role)
+        assertEquals("AI가 응답하지 않을 때 질문", detail.messages[0].content)
+
+        // 같은 대화로 다시 질문해도 대화 자체는 깨지지 않고 계속 쓸 수 있다.
+        client.failWith = null
+        client.nextAnswer = "복구된 답변"
+        val response = service.ask(hr, conversationId, "다시 질문")
+        assertEquals("복구된 답변", response.answer)
+        assertEquals(3, conversations.detail(hr, conversationId).messages.size)
+    }
+
+    @Test
     fun askOnExistingConversationReusesThreadId() {
         val hr = principal("hr.staff@local.docs199")
         val client = FakeAgentChatClient()
@@ -432,5 +536,101 @@ class QuestionServiceTests : IntegrationTestBase() {
         service.ask(hr, conversation.id, "첫 질문")
         assertEquals(conversation.id.toString(), client.lastRequest.threadId)
         assertTrue(conversations.detail(hr, conversation.id).messages.size == 2)
+    }
+
+    @Test
+    fun askOnAnotherUsersConversationViaHttpReturnsNotFound() {
+        val hr = principal("hr.staff@local.docs199")
+        val conversation = conversations.create(hr, "소유자 확인용 대화")
+
+        val headers = HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON }
+        val login =
+            rest.postForEntity(
+                "/api/auth/login",
+                HttpEntity("""{"email":"dev.manager@local.docs199","password":"local-demo-1234"}""", headers),
+                String::class.java,
+            )
+        val token = Regex("\"accessToken\":\"([^\"]+)\"").find(login.body!!)!!.groupValues[1]
+        headers.setBearerAuth(token)
+
+        val response =
+            rest.postForEntity(
+                "/api/conversations/${conversation.id}/messages",
+                HttpEntity("""{"message":"다른 사람 대화에 질문"}""", headers),
+                String::class.java,
+            )
+
+        assertEquals(HttpStatus.NOT_FOUND, response.statusCode)
+        assertTrue(response.body!!.contains("\"code\":\"NOT_FOUND\""))
+    }
+
+    // Covers Issue #34's "conversation restoration" angle: evidence that was visible when the answer was
+    // first stored must be re-checked against *current* access on every restore, not trusted from history.
+    @Test
+    fun restoringConversationHidesEvidenceForADeletedDocument() {
+        val admin = principal("doc.admin@local.docs199")
+        val hr = principal("hr.staff@local.docs199")
+        val source = documentService.createSource(admin, SourceKind.LOCAL, "복원-삭제-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId =
+            documentService
+                .uploadOne(admin, source.id, "restore-deleted.md", file("삭제될 문서"), Clearance.PUBLIC, emptySet(), null)
+                .documentId!!
+        val chunkId = insertChunk(documents.currentVersion(documentId)!!.id, "삭제 전 근거 문구")
+
+        val conversation = conversations.create(hr, "삭제 복원 테스트")
+        conversations.addMessage(hr, conversation.id, MessageRole.USER, "질문")
+        conversations.addMessage(hr, conversation.id, MessageRole.ASSISTANT, "답변", setOf(chunkId))
+        val beforeDelete = conversations.detail(hr, conversation.id)
+        assertEquals(setOf(chunkId), beforeDelete.messages[1].evidenceChunkIds)
+
+        documentService.delete(documentId)
+
+        val afterDelete = conversations.detail(hr, conversation.id)
+        assertEquals(listOf("질문", "답변"), afterDelete.messages.map { it.content })
+        assertEquals(emptySet<UUID>(), afterDelete.messages[1].evidenceChunkIds)
+    }
+
+    @Test
+    fun restoringConversationHidesEvidenceFromASupersededDocumentVersion() {
+        val admin = principal("doc.admin@local.docs199")
+        val hr = principal("hr.staff@local.docs199")
+        val source = documentService.createSource(admin, SourceKind.LOCAL, "복원-버전-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId =
+            documentService
+                .uploadOne(admin, source.id, "restore-version.md", file("1판 본문"), Clearance.PUBLIC, emptySet(), null)
+                .documentId!!
+        val firstVersionId = documents.currentVersion(documentId)!!.id
+        val chunkId = insertChunk(firstVersionId, "1판 근거 문구")
+
+        val conversation = conversations.create(hr, "버전 복원 테스트")
+        conversations.addMessage(hr, conversation.id, MessageRole.ASSISTANT, "답변", setOf(chunkId))
+
+        documentService.uploadOne(admin, source.id, "restore-version.md", file("2판 본문으로 개정"), Clearance.PUBLIC, emptySet(), null)
+        assertTrue(documents.currentVersion(documentId)!!.id != firstVersionId)
+
+        val detail = conversations.detail(hr, conversation.id)
+        assertEquals(emptySet<UUID>(), detail.messages.single().evidenceChunkIds)
+    }
+
+    @Test
+    fun restoringConversationHidesEvidenceAfterAccessIsRevoked() {
+        val admin = principal("doc.admin@local.docs199")
+        val hr = principal("hr.staff@local.docs199")
+        val source = documentService.createSource(admin, SourceKind.LOCAL, "복원-권한-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId =
+            documentService
+                .uploadOne(admin, source.id, "restore-access.md", file("공개였던 문서"), Clearance.PUBLIC, emptySet(), null)
+                .documentId!!
+        val chunkId = insertChunk(documents.currentVersion(documentId)!!.id, "공개였던 근거 문구")
+
+        val conversation = conversations.create(hr, "권한 회수 복원 테스트")
+        conversations.addMessage(hr, conversation.id, MessageRole.ASSISTANT, "답변", setOf(chunkId))
+        val beforeRevoke = conversations.detail(hr, conversation.id)
+        assertEquals(setOf(chunkId), beforeRevoke.messages.single().evidenceChunkIds)
+
+        documentService.updateAccess(documentId, Clearance.INTERNAL, emptySet(), null)
+
+        val detail = conversations.detail(hr, conversation.id)
+        assertEquals(emptySet<UUID>(), detail.messages.single().evidenceChunkIds)
     }
 }

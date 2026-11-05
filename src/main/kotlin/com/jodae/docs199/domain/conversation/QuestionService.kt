@@ -105,7 +105,7 @@ class QuestionService(
             conversation.id,
             MessageRole.ASSISTANT,
             response.answer,
-            visible.map { UUID.fromString(it.id) }.toSet(),
+            (visible.map { UUID.fromString(it.id) } + evidence.map { UUID.fromString(it.chunkId) }).toSet(),
         )
         return QuestionResponse(
             conversation.id,
