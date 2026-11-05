@@ -170,4 +170,28 @@ class JwtPrivilegeFreshnessTests : IntegrationTestBase() {
         val adminRequest = rest.exchange("/api/admin/sources", HttpMethod.GET, HttpEntity<Void>(headers), String::class.java)
         assertEquals(HttpStatus.FORBIDDEN, adminRequest.statusCode)
     }
+
+    @Test
+    fun deletedUserTokenIsRejectedDuringAuthentication() {
+        val suffix = UUID.randomUUID().toString()
+        val department = departments.save(Department(name = "삭제 테스트 부서 $suffix"))
+        val user =
+            users.save(
+                User(
+                    email = "jwt-deleted-$suffix@local.docs199",
+                    passwordHash = "unused",
+                    name = "삭제 테스트 사용자",
+                    department = department,
+                    position = Position.STAFF,
+                    role = Role.SYSTEM_ADMIN,
+                    clearance = Clearance.PUBLIC,
+                ),
+            )
+        val token = tokens.issue(user).getValue("accessToken")
+        jdbc.update("DELETE FROM users WHERE id = ?", user.id)
+
+        val headers = HttpHeaders().apply { setBearerAuth(token) }
+        val response = rest.exchange("/api/admin/sources", HttpMethod.GET, HttpEntity<Void>(headers), String::class.java)
+        assertEquals(HttpStatus.UNAUTHORIZED, response.statusCode)
+    }
 }

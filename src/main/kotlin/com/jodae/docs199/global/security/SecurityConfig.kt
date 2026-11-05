@@ -19,6 +19,8 @@ import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException
+import org.springframework.security.oauth2.core.OAuth2Error
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtEncoder
@@ -114,9 +116,10 @@ class SecurityConfig(
     fun filterChain(http: HttpSecurity): SecurityFilterChain {
         val converter = JwtAuthenticationConverter()
         converter.setJwtGrantedAuthoritiesConverter { jwt ->
-            val userId = runCatching { java.util.UUID.fromString(jwt.subject) }.getOrNull()
-            val role = userId?.let { users.findById(it).orElse(null)?.role }
-            role?.let { listOf(SimpleGrantedAuthority("ROLE_${it.name}")) } ?: emptyList()
+            val invalidToken = { OAuth2AuthenticationException(OAuth2Error("invalid_token")) }
+            val userId = runCatching { java.util.UUID.fromString(jwt.subject) }.getOrElse { throw invalidToken() }
+            val user = users.findById(userId).orElseThrow { invalidToken() }
+            listOf(SimpleGrantedAuthority("ROLE_${user.role.name}"))
         }
         http
             .csrf { it.disable() }
