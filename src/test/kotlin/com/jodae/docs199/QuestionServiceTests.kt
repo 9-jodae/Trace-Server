@@ -4,6 +4,7 @@ import com.jodae.docs199.domain.conversation.AgentAccessScope
 import com.jodae.docs199.domain.conversation.AgentChatClient
 import com.jodae.docs199.domain.conversation.AgentChatRequest
 import com.jodae.docs199.domain.conversation.AgentChatResponse
+import com.jodae.docs199.domain.conversation.AgentEvidence
 import com.jodae.docs199.domain.conversation.AgentSource
 import com.jodae.docs199.domain.conversation.ConversationRepository
 import com.jodae.docs199.domain.conversation.ConversationService
@@ -38,12 +39,18 @@ import java.util.concurrent.atomic.AtomicReference
 
 class FakeAgentChatClient : AgentChatClient {
     var nextSources: List<AgentSource> = emptyList()
+    var nextEvidence: List<AgentEvidence> = emptyList()
     var nextAnswer: String = "답변"
     lateinit var lastRequest: AgentChatRequest
 
     override fun chat(request: AgentChatRequest): AgentChatResponse {
         lastRequest = request
-        return AgentChatResponse(threadId = request.threadId ?: UUID.randomUUID().toString(), answer = nextAnswer, sources = nextSources)
+        return AgentChatResponse(
+            threadId = request.threadId ?: UUID.randomUUID().toString(),
+            answer = nextAnswer,
+            sources = nextSources,
+            evidence = nextEvidence,
+        )
     }
 }
 
@@ -54,7 +61,10 @@ class AgentChatHttpTests {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         server.createContext("/api/v1/agent/chat") { exchange ->
             received.set(exchange.requestBody.bufferedReader().readText())
-            val reply = """{"threadId":"thread","answer":"ok"}""".toByteArray()
+            val reply =
+                """
+                {"threadId":"thread","answer":"ok","evidence":[{"chunkId":"00000000-0000-0000-0000-000000000001","source":"source","documentId":null,"versionId":null,"quote":"핵심 문구","charStart":10,"charEnd":15}]}
+                """.trimIndent().toByteArray()
             exchange.responseHeaders.set("Content-Type", "application/json")
             exchange.sendResponseHeaders(200, reply.size.toLong())
             exchange.responseBody.use { it.write(reply) }
@@ -64,7 +74,12 @@ class AgentChatHttpTests {
             val client = HttpAgentChatClient("http://127.0.0.1:${server.address.port}", 5, "test-secret")
             val departmentId = UUID.randomUUID()
             for (admin in listOf(false, true)) {
-                client.chat(AgentChatRequest("질문", "thread", accessScope = AgentAccessScope(departmentId, "MANAGER", "INTERNAL", admin)))
+                val response =
+                    client.chat(
+                        AgentChatRequest("질문", "thread", accessScope = AgentAccessScope(departmentId, "MANAGER", "INTERNAL", admin)),
+                    )
+                assertEquals("핵심 문구", response.evidence.single().quote)
+                assertEquals(null, response.evidence.single().documentId)
                 val body = received.get()
                 assertTrue(body.contains("\"departmentId\":\"$departmentId\""))
                 assertTrue(body.contains("\"position\":\"MANAGER\""))
@@ -131,14 +146,16 @@ class QuestionServiceTests : IntegrationTestBase() {
         versionId: UUID,
         content: String,
         chunkIndex: Int = 0,
+        charStart: Int? = null,
     ): UUID {
         val id = UUID.randomUUID()
         jdbc.update(
-            "INSERT INTO chunks(id, document_version_id, chunk_index, content) VALUES (?, ?, ?, ?)",
+            "INSERT INTO chunks(id, document_version_id, chunk_index, content, char_start) VALUES (?, ?, ?, ?, ?)",
             id,
             versionId,
             chunkIndex,
             content,
+            charStart,
         )
         return id
     }
@@ -289,6 +306,109 @@ class QuestionServiceTests : IntegrationTestBase() {
 
         assertEquals(3, response.sources.size)
         assertEquals(listOf(firstChunkId, firstChunkId, secondChunkId).map(UUID::toString), response.sources.map { it.id })
+    }
+
+    @Test
+    fun evidenceIsAccessCheckedAndQuoteOffsetsUseUnicodeCodePoints() {
+        val admin = principal("doc.admin@local.docs199")
+        val hr = principal("hr.staff@local.docs199")
+        val dev = principal("dev.manager@local.docs199")
+        val source = documentService.createSource(admin, SourceKind.LOCAL, "evidence-source-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val visibleDocumentId =
+            documentService
+                .uploadOne(admin, source.id, "quote.md", file("공개 문서"), Clearance.PUBLIC, emptySet(), null)
+                .documentId!!
+        val hiddenSource =
+            documentService.createSource(
+                admin,
+                SourceKind.LOCAL,
+                "hidden-source-${UUID.randomUUID()}",
+                null,
+                Clearance.PUBLIC,
+            )
+        val hiddenDocumentId =
+            documentService
+                .uploadOne(admin, hiddenSource.id, "secret-quote.md", file("기밀 문서"), Clearance.CONFIDENTIAL, setOf(dev.departmentId), null)
+                .documentId!!
+
+        val chunkContent = "😀 급여는 20% 할인"
+        val chunkStart = 40
+        val visibleChunkId = insertChunk(documents.currentVersion(visibleDocumentId)!!.id, chunkContent, charStart = chunkStart)
+        val hiddenChunkId = insertChunk(documents.currentVersion(hiddenDocumentId)!!.id, "기밀 할인율은 90%", charStart = 80)
+        val quote = "20% 할인"
+        val quoteLocalStart = chunkContent.codePointCount(0, chunkContent.indexOf(quote))
+
+        val client = FakeAgentChatClient()
+        client.nextEvidence =
+            listOf(
+                AgentEvidence(
+                    chunkId = visibleChunkId.toString(),
+                    source = "AI가 보낸 임의 출처",
+                    documentId = null,
+                    versionId = null,
+                    quote = quote,
+                    charStart = chunkStart + quoteLocalStart,
+                    charEnd = chunkStart + quoteLocalStart + quote.codePointCount(0, quote.length),
+                ),
+                AgentEvidence(
+                    chunkId = hiddenChunkId.toString(),
+                    source = "기밀",
+                    documentId = visibleDocumentId.toString(),
+                    versionId = null,
+                    quote = "기밀 할인율은 90%",
+                ),
+                AgentEvidence(
+                    chunkId = visibleChunkId.toString(),
+                    source = "위조 인용",
+                    quote = "존재하지 않는 문구",
+                ),
+                AgentEvidence(
+                    chunkId = visibleChunkId.toString(),
+                    source = "잘못된 문서 ID",
+                    documentId = hiddenDocumentId.toString(),
+                    quote = quote,
+                ),
+            )
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+
+        val response = service.ask(hr, null, "할인율은?")
+
+        assertEquals(1, response.evidence.size)
+        val evidence = response.evidence.single()
+        assertEquals(visibleChunkId.toString(), evidence.chunkId)
+        assertEquals("quote", evidence.source)
+        assertEquals(visibleDocumentId, evidence.documentId)
+        assertEquals(documents.currentVersion(visibleDocumentId)!!.id, evidence.versionId)
+        assertEquals(quote, evidence.quote)
+        assertEquals(chunkStart + quoteLocalStart, evidence.charStart)
+        assertEquals(chunkStart + quoteLocalStart + quote.codePointCount(0, quote.length), evidence.charEnd)
+    }
+
+    @Test
+    fun questionResponseCapsEvidenceAtThreeItems() {
+        val admin = principal("doc.admin@local.docs199")
+        val employee = principal("hr.staff@local.docs199")
+        val source = documentService.createSource(admin, SourceKind.LOCAL, "evidence-limit-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId =
+            documentService
+                .uploadOne(admin, source.id, "limit.md", file("문서"), Clearance.PUBLIC, emptySet(), null)
+                .documentId!!
+        val chunkId = insertChunk(documents.currentVersion(documentId)!!.id, "A B C D", charStart = 0)
+        val client = FakeAgentChatClient()
+        client.nextEvidence =
+            listOf(
+                AgentEvidence("잘못된-id-1", "임시 출처", quote = "무효1"),
+                AgentEvidence("잘못된-id-2", "임시 출처", quote = "무효2"),
+                AgentEvidence("잘못된-id-3", "임시 출처", quote = "무효3"),
+            ) +
+            listOf("A", "B", "C", "D").map { quote ->
+                AgentEvidence(chunkId.toString(), "임시 출처", quote = quote)
+            }
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+
+        val response = service.ask(employee, null, "질문")
+
+        assertEquals(listOf("A", "B", "C"), response.evidence.map { it.quote })
     }
 
     @Test

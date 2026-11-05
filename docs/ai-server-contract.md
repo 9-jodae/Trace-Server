@@ -32,7 +32,7 @@ AI 서버는 `POST /api/internal/ingestion-jobs/{id}/result`에 같은 공유 �
 
 - 인증: `X-Internal-Secret` 헤더(ingest 콜백과 같은 `INTERNAL_SECRET` 값)
 - 요청: `{"message": "...", "threadId": "대화ID 또는 null", "filters": {...} | null, "accessScope": {"departmentId": "<uuid>", "position": "<직급>", "clearance": "<보안 등급>", "isAdmin": <bool>}}`. `threadId`는 Spring의 `conversations.id`를 그대로 씁니다. **Spring이 호출자가 그 대화의 소유자인지 먼저 확인한 뒤에만 넘기므로, AI 서버는 Spring이 보낸 `threadId`를 신뢰해도 됩니다.** `accessScope`는 호출한 사용자의 `AccessPolicy.scope(principal)` 결과(`department_id uuid, position text, clearance text, is_admin boolean`)를 그대로 담은 값으로, 아래 "청크·권한 보장 조회 함수" 절의 세 함수에 넘기는 네 인자와 이름·값이 같습니다.
-- 응답: `{"threadId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","versionId","charStart","charEnd"}], "failedSources": [...], "fallbackReason": null|"..."}`. `sources[].documentId`로 사용자가 접근할 수 없는 문서의 출처는 Spring이 응답에서 제외합니다(`AccessPolicy`). `sources[].id`(청크 ID, UUID)는 접근 가능한 것만 `conversation_messages.evidence_chunk_ids`에 저장합니다.
+- 응답: `{"threadId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","versionId","charStart","charEnd"}], "evidence": [{"chunkId","source","documentId","versionId","quote","charStart","charEnd"}], "failedSources": [...], "fallbackReason": null|"..."}`. `sources[].documentId`로 사용자가 접근할 수 없는 문서의 출처는 Spring이 응답에서 제외합니다(`AccessPolicy`). `sources[].id`(청크 ID, UUID)는 접근 가능한 것만 `conversation_messages.evidence_chunk_ids`에 저장합니다. `evidence`는 최대 3개이며 없으면 빈 배열입니다. `chunkId`로 실제 청크를 조회하고 같은 접근 정책으로 걸러낸 뒤, 문서·버전·소스 이름은 DB 값을 반환합니다. AI가 보낸 문서 ID와 소스 이름은 신뢰하지 않습니다. 인용은 청크 본문에 정확히 포함된 경우만 반환합니다.
 - 오류: `{"code", "message"}`(`INVALID_REQUEST`/`AI_UNAVAILABLE`/`INTERNAL_ERROR`)를 Spring이 공통 오류 형식(`AI_UNAVAILABLE`, 502)으로 변환합니다.
 - 타임아웃: AI 서버 최대 처리 시간(~60초)보다 길게(기본 70초, `AI_CHAT_TIMEOUT_SECONDS`).
 - `AI_MODE=mock`에서는 고정 응답(`모의 응답입니다: <질문>`)을 반환합니다.
@@ -137,13 +137,19 @@ DB 접속은 `DATABASE_URL` 또는 환경 변수·`.env`의 `DB_PASSWORD`, `DB_U
 - PDF 페이지·`bbox` 제공 계획(파서 확정 이후)
 - `/ingest` 요청·콜백 초안(위 "처리 요청 초안") 수용 여부
 
-## AI 응답의 인용 문구 제안
+## 핵심 인용 문구 (`evidence`)
 
-AI 서버는 `evidence[]`에 `chunkId`, `source`, `documentId`, `versionId`, `quote`, `charStart`, `charEnd`를 제공하는 방식을 제안했습니다. **결정 필요:** 필드 이름과 위치 단위는 양 팀이 확정해야 하며, 현재 Spring 질문 API는 이 배열을 반환하지 않습니다.
+Spring 질문 응답은 AI 서버가 보낸 인용 중 최대 3개를 `evidence`로 반환합니다. 이 배열은 없거나 검증 후 남는 항목이 없으면 `[]`입니다. AI·프론트와 이름을 확정하기 전까지 아래 필드 이름은 임시 계약입니다.
 
-도입할 때는 AI가 보낸 문서·버전 ID와 인용 문구를 그대로 신뢰하지 않고 현재 사용자 권한, 문서 삭제 여부, 현재 버전, 청크 소속과 DB 본문의 인용 위치를 재검증해야 합니다. `charStart`·`charEnd`는 유니코드 코드 포인트 기준이며 Java의 UTF-16 인덱스와 다를 수 있으므로 보조 평면 문자를 포함한 문서도 검증해야 합니다. 기존 출처 재검증과 답변 본문의 권한 안전성은 별도로 확인합니다.
+```json
+{"evidence":[{"chunkId":"<UUID>","source":"<소스 이름>","documentId":"<UUID>","versionId":"<UUID>","quote":"원문 그대로의 문구","charStart":10,"charEnd":20}]}
+```
 
-**가정:** 검색 필터가 있으면 AI 서버는 이전 근거 재사용과 JEV를 건너뛰고 현재 필터로 새로 검색합니다. `threadId`의 소유자는 Spring이 확인합니다. 실제 연동 검증은 AI 서비스와 적재된 청크가 준비된 뒤 진행합니다.
+AI의 `documentId`, `versionId`, `source` 값은 신뢰하지 않습니다. `chunkId`로 DB의 청크·현재 버전·삭제 여부를 확인하고 `AccessPolicy` 접근 범위를 통과한 청크만 반환합니다. 문서 제목과 문서·버전 ID는 DB에서 채웁니다. `source`에는 기존 `sources` 응답과 같이 검증된 문서 제목을 반환합니다. `quote`는 청크 본문에 정확히 있어야 합니다. 위치는 원문 전체 기준 유니코드 코드 포인트 범위(`[charStart, charEnd)`)이며, Java UTF-16 인덱스로 그대로 쓰지 않습니다. 청크 시작 위치와 AI가 준 범위가 본문과 일치하면 사용하고, 범위가 없거나 일치하지 않으면 청크 안에 문구가 한 번만 있을 때 위치를 계산합니다. 반복되거나 검증할 수 없는 위치는 `null`로 반환하지만, 인용 문구 자체가 청크에 없으면 해당 항목을 제외합니다. 문서·버전 ID가 입력에서 `null`이어도 청크로 소속을 검증할 수 있으면 DB 값으로 대체합니다. 확인할 수 없는 청크나 접근할 수 없는 문서는 제외합니다.
+
+프론트는 검증된 `quote`를 답변 아래에 표시합니다. 하이라이트에는 원문 코드 포인트 오프셋을 JavaScript UTF-16 인덱스로 변환해야 합니다. 위치가 `null`이면 청크 단위로 표시합니다. 실제 LLM 인용 정확도 검증은 Bedrock Haiku 권한이 확보된 뒤 진행하며, 그 전에는 고정 mock 응답으로 계약을 확인합니다.
+
+**가정:** 검색 필터가 있으면 AI 서버는 이전 근거 재사용과 JEV를 건너뛰고 현재 필터로 새로 검색합니다. `threadId`의 소유자는 Spring이 확인합니다. 실제 연동 검증은 AI 서비스와 적재된 청크가 준비된 뒤 진행합니다. `evidence`의 필드 이름과 반복 인용 위치 정책은 AI·프론트 팀과 확인이 필요합니다.
 
 ## 임시 임베딩 중계 API
 
