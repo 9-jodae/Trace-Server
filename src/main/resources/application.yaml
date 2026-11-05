@@ -43,6 +43,9 @@ app:
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     retry-count: ${AI_RETRY_COUNT:0}
     chat-timeout-seconds: ${AI_CHAT_TIMEOUT_SECONDS:70}
+  graph:
+    topic-edges-enabled: ${GRAPH_TOPIC_EDGES_ENABLED:false}
+    max-topic-edges: ${GRAPH_MAX_TOPIC_EDGES:1000}
 ---
 spring.config.activate.on-profile: local
 springdoc.api-docs.enabled: true

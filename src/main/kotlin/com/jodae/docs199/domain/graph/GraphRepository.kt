@@ -25,10 +25,35 @@ data class GraphRelationRow(
     val detail: ConflictDetail?,
 )
 
+data class GraphDocumentTopicRow(
+    val topic: String,
+    val documentId: UUID,
+)
+
 @Repository
 class GraphRepository(
     private val jdbc: JdbcTemplate,
 ) {
+    fun topicsForAccessibleCurrentDocuments(scope: AccessScope): List<GraphDocumentTopicRow> =
+        jdbc.query(
+            """
+            SELECT lower(trim(t.topic)) AS topic, d.id AS document_id
+            FROM document_topics t
+            JOIN document_versions dv ON dv.id = t.document_version_id
+            JOIN documents d ON d.id = dv.document_id AND dv.version_number = d.current_version
+            JOIN accessible_document_versions(?, ?, ?, ?) av ON av.document_version_id = dv.id
+            WHERE d.deleted_at IS NULL
+            ORDER BY lower(trim(t.topic)), d.id
+            """.trimIndent(),
+            { rs, _ ->
+                GraphDocumentTopicRow(rs.getString("topic"), rs.getObject("document_id", UUID::class.java))
+            },
+            scope.departmentId,
+            scope.position.name,
+            scope.clearance.name,
+            scope.isAdmin,
+        )
+
     fun accessibleNodes(scope: AccessScope): List<GraphNodeRow> =
         jdbc.query(
             """
