@@ -95,6 +95,12 @@ docker compose -f compose.prod.yaml rm -f caddy
 
 업로드 한도는 nginx `client_max_body_size 150m`, 질문 API 제한 시간은 `proxy_read_timeout 90s`입니다. HTTPS 요청은 Caddy에서 Nginx로 전달되고 같은 제한을 적용받습니다.
 
+## 채팅과 적재 모드
+
+운영에서는 질문·채팅 모드와 문서 적재 모드를 별도로 설정할 수 있습니다. `AI_MODE=http`는 채팅을 AI 서버로 연결하고 `AI_INGEST_MODE=mock`은 Spring의 미확정 `/ingest` 계약 호출을 막습니다. 이때 업로드 결과가 `DONE`이어도 청크·임베딩이 생긴 것이 아니므로 **새로 올린 문서는 수동 적재 전에는 검색되지 않습니다.**
+
+`AI_INGEST_MODE`를 생략하면 기존 동작 호환을 위해 `AI_MODE`와 같은 모드가 사용됩니다. 업로드 후 `DONE`은 실제 색인 완료를 보장하지 않습니다. 시연용 자료의 JSON 내보내기, AI CLI 적재, 청크 상태 확인은 [시연 진행 문서의 사전 적재 절차](demo-runbook.md#사전-적재-절차)를 따릅니다.
+
 ## Neo4j 메모리 제한
 
 Neo4j Community 컨테이너는 힙 1G, 페이지 캐시 512M로 제한합니다. 이 서버는 Spring 앱·PostgreSQL과 함께 여러 팀이 공유하며, 앞으로 AI 서버도 같은 호스트에 올라올 예정입니다. Neo4j의 기본 메모리 설정은 호스트 전체 메모리를 기준으로 자동 계산되어 단독 서버를 가정하므로, 공유 호스트에서는 다른 컨테이너의 메모리를 빼앗지 않도록 명시적으로 낮은 값을 고정합니다. 데모 규모 데이터셋에는 충분한 크기입니다.

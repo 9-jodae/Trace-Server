@@ -38,6 +38,7 @@ app:
       prefix: ${S3_PREFIX:uploads/}
   ai:
     mode: ${AI_MODE:mock}
+    ingestion-mode: ${AI_INGEST_MODE:${AI_MODE:mock}}
     base-url: ${AI_BASE_URL:http://localhost:8000}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     retry-count: ${AI_RETRY_COUNT:0}
@@ -69,6 +70,7 @@ app:
       prefix: ${S3_PREFIX:uploads/}
   ai:
     mode: ${AI_MODE:mock}
+    ingestion-mode: ${AI_INGEST_MODE:${AI_MODE:mock}}
     base-url: ${AI_BASE_URL:http://ai:8000}
 ---
 spring.config.activate.on-profile: test

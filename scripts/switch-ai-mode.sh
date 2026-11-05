@@ -1,15 +1,16 @@
 #!/bin/sh
-# AI 연동 모드를 전환하고(.env의 AI_MODE·AI_BASE_URL만 수정) 잠금 배포까지 실행한다.
+# AI 연동 모드를 전환하고 필요하면 AI_INGEST_MODE도 수정한 뒤 잠금 배포까지 실행한다.
 # .env 백업·수정부터 배포까지 전체를 하나의 flock으로 감싸, 동시 실행 시 .env가
 # 경쟁 상태로 섞여 쓰이는 일을 막는다.
 set -eu
 
 mode=${1:-}
 base_url=${2:-}
+ingestion_mode=${3:-}
 
 usage() {
-    echo "Usage: scripts/switch-ai-mode.sh <mock|http> [base-url]" >&2
-    echo "  scripts/switch-ai-mode.sh http http://host.docker.internal:8000" >&2
+    echo "Usage: scripts/switch-ai-mode.sh <mock|http> [base-url] [mock|http]" >&2
+    echo "  scripts/switch-ai-mode.sh http http://host.docker.internal:8000 mock" >&2
     echo "  scripts/switch-ai-mode.sh mock" >&2
 }
 
@@ -19,6 +20,10 @@ if [ "$mode" != "mock" ] && [ "$mode" != "http" ]; then
 fi
 if [ "$mode" = "http" ] && [ -z "$base_url" ]; then
     echo "오류: http 모드는 base-url 인자가 필요합니다." >&2
+    usage
+    exit 1
+fi
+if [ -n "$ingestion_mode" ] && [ "$ingestion_mode" != "mock" ] && [ "$ingestion_mode" != "http" ]; then
     usage
     exit 1
 fi
@@ -55,6 +60,9 @@ set_env_value() {
 set_env_value AI_MODE "$mode"
 if [ "$mode" = "http" ]; then
     set_env_value AI_BASE_URL "$base_url"
+fi
+if [ -n "$ingestion_mode" ]; then
+    set_env_value AI_INGEST_MODE "$ingestion_mode"
 fi
 chmod 600 .env
 

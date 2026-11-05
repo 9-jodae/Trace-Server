@@ -54,7 +54,22 @@ scripts/switch-ai-mode.sh http http://host.docker.internal:8000   # mock -> http
 scripts/switch-ai-mode.sh mock                                     # http -> mock 되돌리기
 ```
 
-`.env`의 `AI_MODE`·`AI_BASE_URL` 두 값만 바꾸고 수정 전 백업부터 배포까지 같은 잠금을 유지합니다. 잠금 대기는 최대 5분입니다. 서버 간 비밀이 외부로 전송되지 않도록 HTTP 주소는 위 두 내부 주소만 허용합니다. 백업 파일은 600 권한이며 Git에서 제외합니다. 비밀값은 화면에 출력하지 않습니다.
+`.env`의 `AI_MODE`와 HTTP 모드의 `AI_BASE_URL`을 바꾸고, 세 번째 인자를 지정한 경우 `AI_INGEST_MODE`도 변경합니다. 수정 전 백업부터 배포까지 같은 잠금을 유지합니다. 잠금 대기는 최대 5분입니다. 서버 간 비밀이 외부로 전송되지 않도록 HTTP 주소는 위 두 내부 주소만 허용합니다. 백업 파일은 600 권한이며 Git에서 제외합니다. 비밀값은 화면에 출력하지 않습니다.
+
+### 채팅과 문서 적재 모드 분리
+
+`AI_MODE`는 질문·채팅 AI 클라이언트를, `AI_INGEST_MODE`는 문서 적재 작업을 선택합니다. 둘 다 `mock` 또는 `http`입니다. `AI_INGEST_MODE`를 지정하지 않으면 기존 호환성을 위해 `AI_MODE` 값을 따릅니다. 따라서 실제 채팅은 `AI_MODE=http`, 새 업로드는 수동 적재를 위해 `AI_INGEST_MODE=mock`으로 분리할 수 있습니다.
+
+적재 `mock`은 잡을 `PROCESSING` 후 `DONE`으로 끝내고 임시 문서 유형을 지정할 뿐, 청크나 임베딩을 만들지 않습니다. 그러므로 이 상태만으로 검색 가능하다고 판단하면 안 됩니다. AI 검색을 시연하려면 별도 사전 적재 절차를 완료해야 합니다.
+
+`switch-ai-mode.sh`의 세 번째 인자로 적재 모드를 지정할 수 있습니다. 생략하면 `.env`의 기존 `AI_INGEST_MODE`를 보존합니다.
+
+```bash
+scripts/switch-ai-mode.sh http http://host.docker.internal:8000 mock
+scripts/switch-ai-mode.sh mock
+```
+
+잘못된 `AI_INGEST_MODE` 값은 설정 바인딩 오류로 애플리케이션 기동을 실패시킵니다.
 
 ## `ai_app` 계정이 할 수 있는 것
 
