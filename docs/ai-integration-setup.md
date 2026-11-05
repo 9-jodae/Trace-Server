@@ -59,6 +59,8 @@ scripts/switch-ai-mode.sh mock                                     # http -> moc
 ## `ai_app` 계정이 할 수 있는 것
 
 - 읽기(`SELECT`)만: `documents`, `document_versions`, `document_departments`, `sources`, `departments`, `ingestion_jobs`
+- 읽기·쓰기: `chunks` (`SELECT`, `INSERT`, `UPDATE`, `DELETE`)
+- 실행: `accessible_document_versions`, `accessible_chunks`, `filter_accessible_chunk_ids`
 - 접근 불가: `users`, `conversations`, `conversation_messages`, Flyway 이력 테이블
 - 테이블 생성 등 DDL 불가
 
