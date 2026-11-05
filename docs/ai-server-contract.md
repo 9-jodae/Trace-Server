@@ -32,7 +32,29 @@ AI 서버는 `POST /api/internal/ingestion-jobs/{id}/result`에 같은 공유 �
 
 - 인증: `X-Internal-Secret` 헤더(ingest 콜백과 같은 `INTERNAL_SECRET` 값)
 - 요청: `{"message": "...", "threadId": "대화ID 또는 null", "filters": {...} | null, "accessScope": {"departmentId": "<uuid>", "position": "<직급>", "clearance": "<보안 등급>", "isAdmin": <bool>}}`. `threadId`는 Spring의 `conversations.id`를 그대로 씁니다. **Spring이 호출자가 그 대화의 소유자인지 먼저 확인한 뒤에만 넘기므로, AI 서버는 Spring이 보낸 `threadId`를 신뢰해도 됩니다.** `accessScope`는 호출한 사용자의 `AccessPolicy.scope(principal)` 결과(`department_id uuid, position text, clearance text, is_admin boolean`)를 그대로 담은 값으로, 아래 "청크·권한 보장 조회 함수" 절의 세 함수에 넘기는 네 인자와 이름·값이 같습니다.
-- 응답: `{"threadId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","versionId","charStart","charEnd"}], "evidence": [{"chunkId","source","documentId","versionId","quote","charStart","charEnd"}], "failedSources": [...], "fallbackReason": null|"..."}`. `sources[].documentId`로 사용자가 접근할 수 없는 문서의 출처는 Spring이 응답에서 제외합니다(`AccessPolicy`). `sources[].id`(청크 ID, UUID)는 접근 가능한 것만 `conversation_messages.evidence_chunk_ids`에 저장합니다. `evidence`는 최대 3개이며 없으면 빈 배열입니다. `chunkId`로 실제 청크를 조회하고 같은 접근 정책으로 걸러낸 뒤, 문서·버전·소스 이름은 DB 값을 반환합니다. AI가 보낸 문서 ID와 소스 이름은 신뢰하지 않습니다. 인용은 청크 본문에 정확히 포함된 경우만 반환합니다.
+- 응답: `{"threadId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","versionId","charStart","charEnd"}], "evidence": [{"chunkId","source","documentId","versionId","quote","charStart","charEnd"}], "failedSources": [...], "fallbackReason": null|"..."}`. `sources[].documentId`로 사용자가 접근할 수 없는 문서의 출처는 Spring이 응답에서 제외합니다(`AccessPolicy`). `sources[].id`(청크 ID, UUID)는 접근 가능한 것만 `conversation_messages.evidence_chunk_ids`에 저장합니다.
+
+`AgentChatResponse.evidence`의 AI 응답 형식은 다음과 같습니다. 제안 필드명과 계약은 AI·프론트와 최종 합의 전 임시입니다.
+
+```json
+{
+  "evidence": [
+    {
+      "chunkId": "<uuid>",
+      "source": "취업규칙",
+      "documentId": "<uuid 또는 null>",
+      "versionId": "<uuid 또는 null>",
+      "quote": "연차는 최대 5일까지 이월할 수 있다.",
+      "charStart": 120,
+      "charEnd": 140
+    }
+  ]
+}
+```
+
+AI는 최대 3개를 보내며, 근거가 없으면 빈 배열을 보냅니다. `documentId`, `versionId`, `charStart`, `charEnd`는 nullable입니다. `charStart`/`charEnd`는 문서 본문 기준 유니코드 코드 포인트 오프셋이며 끝 위치는 미포함입니다. Spring 응답에서도 이 의미를 유지합니다.
+
+Spring은 AI의 `source`, `documentId`, `versionId`, 오프셋을 권한·소속 검증의 근거로 신뢰하지 않습니다. `chunkId`를 UUID로 해석하고 DB의 청크·문서·버전을 조회해 해당 문서가 삭제되지 않았고 현재 버전이며 호출자의 `AccessPolicy` 범위에 있는지 확인합니다. AI가 보낸 문서·버전 ID가 non-null이면 DB의 실제 값과 일치해야 합니다. 실제 청크 본문에 `quote`가 정확히 포함되는 경우만 반환합니다. 위치는 DB 청크의 본문 시작 오프셋과 청크 내 quote 위치를 기준으로 검증·계산하며, AI 오프셋이 quote와 일치하지 않으면 유일한 quote 위치를 이용해 재계산합니다. 본문 시작 위치를 알 수 없거나 quote 위치가 모호하면 quote는 검증되어 반환될 수 있지만 `charStart`와 `charEnd`는 `null`입니다. 근거가 불완전하거나 권한 검증에 실패한 항목은 제외하며, 검증 후 최대 3개를 반환합니다. 따라서 AI 입력 배열이 비어 있거나 모든 항목이 제외되면 Spring 응답은 `"evidence": []`입니다.
 - 오류: `{"code", "message"}`(`INVALID_REQUEST`/`AI_UNAVAILABLE`/`INTERNAL_ERROR`)를 Spring이 공통 오류 형식(`AI_UNAVAILABLE`, 502)으로 변환합니다.
 - 타임아웃: AI 서버 최대 처리 시간(~60초)보다 길게(기본 70초, `AI_CHAT_TIMEOUT_SECONDS`).
 - `AI_MODE=mock`에서는 고정 응답(`모의 응답입니다: <질문>`)을 반환합니다.

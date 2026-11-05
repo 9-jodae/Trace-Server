@@ -184,7 +184,22 @@ Authorization: Bearer <token>
 {"message": "연차는 며칠까지 이월할 수 있나요?"}
 ```
 
-응답 `data`: `{"conversationId", "answer", "route", "contextProbability", "sources": [{"id","text","source","documentId","documentTitle","versionId","charStart","charEnd"}], "evidence": [{"chunkId","source","documentId","versionId","quote","charStart","charEnd"}], "failedSources", "fallbackReason"}`. `sources`와 `evidence`는 사용자가 접근할 수 있는 현재 버전 청크만 반환합니다. `evidence`는 최대 3개이며 검증 가능한 항목이 없으면 빈 배열입니다. `quote`는 청크 원문과 일치해야 합니다. 인용의 `charStart`/`charEnd`는 원문 전체 기준 유니코드 코드 포인트 위치이며, 검증할 수 없는 위치는 `null`입니다. 화면에서 하이라이트할 때는 JavaScript UTF-16 인덱스로 변환하고, 위치가 `null`이면 청크 단위로 표시합니다. 필드 이름은 AI·프론트 합의 전 임시입니다. SSE가 아닌 단건 응답이며, AI 서버 처리 시간 때문에 최대 70초까지 걸릴 수 있습니다. 다른 사람의 대화 ID로 질문하면 `NOT_FOUND`입니다. `sources[].id`는 아래 근거 조회 API의 `{chunkId}`로 그대로 씁니다. 자세한 검증 규칙은 [AI 서버 계약](ai-server-contract.md#핵심-인용-문구-evidence)을 참고하세요.
+응답 `data`의 관련 형식은 다음과 같습니다.
+
+```json
+{
+  "conversationId": "<uuid>",
+  "answer": "연차 이월 한도는 5일입니다.",
+  "sources": [{"id": "<chunk-uuid>", "text": "...", "source": "취업규칙", "documentId": "<uuid>", "documentTitle": "취업규칙", "versionId": "<uuid>", "charStart": 120, "charEnd": 160}],
+  "evidence": [{"chunkId": "<chunk-uuid>", "source": "취업규칙", "documentId": "<uuid>", "versionId": "<uuid>", "quote": "연차는 최대 5일까지 이월할 수 있다.", "charStart": 120, "charEnd": 140}],
+  "failedSources": [],
+  "fallbackReason": null
+}
+```
+
+AI가 Spring에 보내는 evidence의 `documentId`, `versionId`, `charStart`, `charEnd`는 `null`일 수 있습니다. Spring 응답의 `chunkId`, `source`, `documentId`, `versionId`, `quote`는 DB 검증을 통과한 실제 값으로 채워지며 null이 아닙니다. 응답의 `charStart`와 `charEnd`는 위치를 계산할 수 없으면 둘 다 `null`입니다. 항목은 최대 3개이고, 검증 가능한 항목이 없으면 `[]`입니다. `quote`는 DB에서 확인한 청크 본문에 그대로 포함된 문구만 반환합니다.
+
+`charStart`/`charEnd`는 문서 본문 기준 유니코드 코드 포인트 오프셋이며 끝 위치는 미포함입니다. 청크의 문서 본문 시작 위치와 청크 내 인용 위치로 계산합니다. 위치를 신뢰성 있게 계산할 수 없으면 두 값 모두 `null`입니다. 브라우저에서 원문 위치를 사용할 때는 JavaScript UTF-16 인덱스로 변환해야 합니다. `null`이면 해당 청크 단위로 표시합니다. 이 필드와 `evidence` 구조는 AI·프론트 합의 전 임시 계약입니다. 응답은 SSE가 아닌 단건이며 AI 처리 시간 때문에 최대 70초까지 걸릴 수 있습니다. 다른 사람의 대화 ID로 질문하면 `NOT_FOUND`입니다. `sources[].id`는 아래 근거 조회 API의 `{chunkId}`로 그대로 씁니다. 자세한 검증 규칙은 [AI 서버 계약](ai-server-contract.md#핵심-인용-문구-evidence)을 참고하세요.
 
 ## 근거 조회
 
