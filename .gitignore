@@ -4,6 +4,8 @@
 build/
 .idea/
 .env
+.env.bak.*
+.env.tmp.*
 *.pem
 *.iml
 CLAUDE.local.md

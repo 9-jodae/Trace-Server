@@ -1,5 +1,7 @@
 #!/bin/sh
 # AI 연동 모드를 전환하고(.env의 AI_MODE·AI_BASE_URL만 수정) 잠금 배포까지 실행한다.
+# .env 백업·수정부터 배포까지 전체를 하나의 flock으로 감싸, 동시 실행 시 .env가
+# 경쟁 상태로 섞여 쓰이는 일을 막는다.
 set -eu
 
 mode=${1:-}
@@ -20,12 +22,21 @@ if [ "$mode" = "http" ] && [ -z "$base_url" ]; then
     usage
     exit 1
 fi
+if [ "$mode" = "http" ]; then
+    case "$base_url" in
+        http://ai:8000|http://host.docker.internal:8000) ;;
+        *) echo "오류: AI 서버 내부 주소만 허용합니다." >&2; exit 1 ;;
+    esac
+fi
 if [ ! -f .env ]; then
     echo "중단: 저장소 루트에 .env 파일이 없습니다." >&2
     exit 1
 fi
 
-backup=".env.bak.$(date +%Y%m%d%H%M%S)"
+exec 9>/tmp/docs199-deploy.lock
+flock -w 300 9
+
+backup=$(mktemp .env.bak.XXXXXXXX)
 cp .env "$backup"
 chmod 600 "$backup"
 
@@ -48,4 +59,4 @@ fi
 chmod 600 .env
 
 echo "AI_MODE를 ${mode}로 전환했습니다(.env 백업: ${backup}). 잠금 배포를 시작합니다."
-flock /tmp/docs199-deploy.lock scripts/deploy.sh develop
+scripts/deploy.sh develop

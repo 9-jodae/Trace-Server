@@ -74,7 +74,7 @@ services:
   # AI server: uncomment once its image is published and the ingest/query contract (Issue #14) is confirmed.
   # ai:
   #   build:
-  #     context: ../docs199-AI
+  #     context: ../docs199-AI-v2
   #   environment:
   #     DB_URL: jdbc:postgresql://postgres:5432/docs199
   #     AI_DB_USER: ai_app

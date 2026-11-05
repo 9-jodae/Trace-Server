@@ -28,12 +28,12 @@ AI 서버가 같은 Compose 네트워크에 올라가면(터널이 아니라 컨
 
 ## AI 서버 연결
 
-AI 서버(FastAPI, `POST /api/v1/agent/chat`, 포트 8000)를 팀 서버에 실제로 연결할 때 두 가지 방식이 있습니다.
+AI 서버 코드는 [docs199-AI-v2](https://github.com/9-jodae/docs199-AI-v2) 저장소를 사용합니다. 기존 `docs199-AI` 저장소는 이전되어 사용하지 않습니다. 실행·설정 방법은 AI 저장소에서 확인합니다.
 
-1. **같은 Compose 서비스로 올리기**: `compose.prod.yaml`에 주석 처리된 `ai` 서비스를 그대로 사용합니다. 같은 Docker 네트워크에 올라가므로 Spring은 `http://ai:8000`으로 접근합니다. 포트를 호스트에 공개할 필요가 없습니다.
-2. **서버 venv로 직접 띄우기**: AI 팀이 `~/docs199-Server`가 아닌 별도 경로에서 Python venv로 AI 서버를 기동합니다. 이때 AI 서버는 `0.0.0.0:8000`으로 바인딩해야 Spring 컨테이너가 접근할 수 있습니다. Spring 컨테이너에서는 `http://host.docker.internal:8000`으로 접근합니다(`compose.prod.yaml`의 `app` 서비스에 `extra_hosts: ["host.docker.internal:host-gateway"]`가 추가되어 있어 컨테이너 안에서 호스트로 되돌아가는 이 이름이 풀립니다).
+1. **같은 Compose 서비스로 올리기**: `compose.prod.yaml`의 `ai` 서비스 주석은 자리 표시이며 AI 팀과 이미지·설정 계약을 확정한 후 구성합니다. Spring은 내부 주소 `http://ai:8000`으로 접근합니다. AI 포트를 호스트에 게시하지 않습니다.
+2. **서버 venv로 직접 띄우기**: AI 서버를 Docker 기본 브리지의 게이트웨이 주소에만 바인딩합니다. `0.0.0.0`은 외부 연결도 받을 수 있으므로 사용하지 않습니다. 서버에서 `docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}'`로 주소를 확인하고 AI 서버 실행 옵션에 지정합니다. Spring 컨테이너는 `http://host.docker.internal:8000`으로 접근합니다. 해당 주소가 컨테이너에서 가리키는 게이트웨이와 일치하고 외부 인터페이스에서 포트가 열리지 않는지 확인합니다.
 
-어느 방식이든 AI 서버의 8000 포트를 **외부 공개용 보안 그룹에 추가로 열 필요는 없습니다**. 서버의 보안 그룹 자체는 이미 열려 있을 수 있으므로, AI 서버는 반드시 모든 요청에서 `X-Internal-Secret` 헤더 값이 서버 `.env`의 `INTERNAL_SECRET`과 같은지 검증해야 합니다(ingest 콜백과 같은 비밀값).
+두 방식 모두 AI 서버는 `X-Internal-Secret`을 검증해야 합니다. 인증만으로 외부 포트 공개가 안전해지는 것은 아니므로 AI 포트를 외부에 공개하지 않습니다.
 
 ### Spring을 mock에서 http로 전환
 
@@ -54,7 +54,7 @@ scripts/switch-ai-mode.sh http http://host.docker.internal:8000   # mock -> http
 scripts/switch-ai-mode.sh mock                                     # http -> mock 되돌리기
 ```
 
-`.env`의 `AI_MODE`·`AI_BASE_URL` 두 값만 바꾸고(다른 값은 건드리지 않음) 수정 전 `.env`를 타임스탬프 백업 파일로 남긴 뒤 잠금 배포까지 실행합니다. 비밀값은 화면에 출력하지 않습니다.
+`.env`의 `AI_MODE`·`AI_BASE_URL` 두 값만 바꾸고 수정 전 백업부터 배포까지 같은 잠금을 유지합니다. 잠금 대기는 최대 5분입니다. 서버 간 비밀이 외부로 전송되지 않도록 HTTP 주소는 위 두 내부 주소만 허용합니다. 백업 파일은 600 권한이며 Git에서 제외합니다. 비밀값은 화면에 출력하지 않습니다.
 
 ## `ai_app` 계정이 할 수 있는 것
 
