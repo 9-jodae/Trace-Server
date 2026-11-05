@@ -4,7 +4,7 @@
 
 ## 방식
 
-Spring이 PostgreSQL에 저장된 **선언된 관계**로 그래프를 만듭니다. AI 서버가 별도로 쌓는 Neo4j 그래프(임베딩·탐색용)와는 다른 것입니다. 지금은 사람이 지정한 시연용 관계이고, 자동으로 추출한 관계가 아닙니다. 데모의 원천 데이터는 `demo/manifest.json`의 각 문서 항목에 있는 `references`(참조)와 `conflicts`(충돌, `item`/`thisValue`/`otherValue` 포함)입니다. 나중에 관계를 Neo4j 기반 자동 추출로 바꾸더라도 이 API의 요청·응답 형식은 그대로 유지합니다.
+Spring이 PostgreSQL에 저장된 관계로 그래프를 만듭니다. 사람이 지정하는 `REFERENCES`·`CONFLICTS`와, 현재 버전의 문서에 저장된 공통 주제 `TOPIC`을 함께 반환합니다. AI 서버가 별도로 쌓는 Neo4j 그래프(임베딩·탐색용)와는 다른 것입니다. 주제 추출은 AI 적재 단계의 책임이며, `GRAPH_TOPIC_EDGES_ENABLED` 기본값은 `false`입니다.
 
 ## 엔드포인트
 
@@ -65,6 +65,9 @@ Authorization: Bearer <token>
 - `source`/`target`은 항상 `documentId`(UUID)입니다. `REFERENCES`는 "source가 target을 참조한다"는 방향을 그대로 유지합니다. `CONFLICTS`는 관계 자체에 방향 의미가 없으므로 **같은 문서 쌍 간 같은 충돌 항목은 정확히 한 행으로만 저장**합니다. 저장 시 `source_document_id`를 두 문서 UUID 중 더 작은 값(텍스트 비교 기준)으로 정규화하고, `detail.thisValue`는 그 `source` 쪽 값, `detail.otherValue`는 `target` 쪽 값으로 맞춰 넣습니다. 즉 같은 쌍을 역방향으로 다시 적재해도 같은 행을 갱신할 뿐 새 행이 생기지 않습니다.
 - `label`은 `type`에서 바로 계산하는 고정 문자열(`"REFERENCES"` → `"참조"`, `"CONFLICTS"` → `"충돌"`)이며 관계 행에 별도로 저장하지 않습니다.
 - `detail`은 `CONFLICTS`에만 있고 `REFERENCES`는 `null`입니다.
+- `TOPIC`은 두 문서가 공유하는 주제를 하나의 간선으로 합칩니다. `source`/`target`은 UUID 문자열 오름차순이며, `label`과 `detail.topics`는 정규화된 주제 문자열 순서로 정렬합니다. 주제 매칭은 앞뒤 공백 제거와 영문 대소문자 무시를 적용합니다.
+- `TOPIC` 간선 ID는 `UUID.nameUUIDFromBytes("docs199:topic:<source>:<target>")`로 계산하므로, 같은 문서 쌍은 주제 목록이 바뀌어도 같은 ID를 유지합니다.
+- `TOPIC.detail`은 `{"topics":[...]}`입니다. 기존 `REFERENCES`와 `CONFLICTS`의 응답 형식은 유지합니다.
 - `versionCount`는 삭제되지 않은 모든 버전 수, `currentVersion`은 `documents.current_version`입니다.
 - `ownerDepartment`는 문서에 소유 부서가 지정되지 않은 경우 `null`입니다. 소유 부서는 열람 가능 부서 범위와 별개입니다.
 
@@ -91,13 +94,6 @@ Authorization: Bearer <token>
 - 노드를 클릭하면 상세는 `GET /api/documents/{id}`로 조회합니다.
 - 근거 하이라이트가 필요하면 기존 근거 조회 API `GET /api/evidence/{chunkId}`를 그대로 씁니다. 그래프 API는 청크·근거 정보를 포함하지 않습니다.
 
-## 다음 단계(구현 PR 예고)
+## 다음 단계
 
-아래는 구현 PR에서 그대로 따를 초안이며, 이 문서가 머지된 뒤 코드로 옮겨집니다.
-
-- 마이그레이션 `V14__document_relations.sql`: `document_relations(id uuid pk, source_document_id uuid, target_document_id uuid, relation_type text, detail jsonb null, created_at timestamptz)`. 관계 종류별 부분 유니크 인덱스로 중복 등록을 막고, 양쪽 컬럼에 인덱스를 둡니다. `REFERENCES`는 `(source_document_id, target_document_id)`에, `CONFLICTS`는 `(source_document_id, target_document_id, (detail->>'item'))`에 부분 유니크 인덱스를 둡니다. `CONFLICTS`는 `detail.item`이 비어 있지 않은 값이어야 하며, 위 정규화 규칙(작은 UUID를 `source`로)으로 적재·갱신합니다. 같은 문서 쌍의 같은 `item`은 역방향 재등록도 기존 행 갱신으로 처리하고, 서로 다른 `item`은 별도 행으로 보존합니다. 관리자 API의 멱등 식별 키도 관계 종류에 따라 동일하게 적용합니다.
-- **`ai_app`에는 이 테이블에 어떤 권한도 부여하지 않습니다.** 그래프는 Spring이 `AccessPolicy`로 필터링해서만 내보내는 기능이고, AI 서버가 원본 `document_relations`를 직접 읽으면 권한 밖 문서의 `detail`(연차 이월 일수 같은 실제 값)까지 그대로 노출되어 API가 보장하는 존재 은닉·내용 보호가 DB 경로에서 무력화됩니다. AI 서버가 그래프 데이터가 필요해지면 그때 별도 합의로 권한 필터링된 인터페이스를 추가합니다(`docs/ai/rules/security.md`, `docs/ai-server-contract.md`의 `ai_app` 권한 원칙과 동일).
-- 조회 서비스는 접근 가능 문서 목록(`accessible_document_versions` 등 기존 함수)로 먼저 필터링한 뒤 그 범위 안의 관계만 그래프로 구성합니다. 별도 권한 규칙을 새로 만들지 않습니다.
-- 관리자 전용 등록·삭제: `POST /api/admin/document-relations`, `DELETE /api/admin/document-relations/{id}` (`DOC_ADMIN` 이상). 등록 API도 관계 종류별 멱등 키와 `CONFLICTS` 정규화 규칙을 적용합니다. 변경 권한은 역할 검사와 관계 양 끝 문서에 대한 기존 `AccessPolicy`를 모두 적용합니다. `DOC_ADMIN`은 열람 권한을 우회하지 않으며, `SYSTEM_ADMIN`은 기존 정책대로 전체 문서에 접근합니다. 등록 시 문서 ID가 없거나 호출자가 열람할 수 없으면 `NOT_FOUND`(404)를 반환하고, 삭제 시에도 관계가 없거나 양 끝 중 하나라도 열람 불가능하면 `NOT_FOUND`(404)로 존재와 권한 없음을 구별하지 않습니다. 역할이 부족하면 `FORBIDDEN`(403)입니다.
-- 등록 요청은 `{"sourceDocumentId":"<UUID>","targetDocumentId":"<UUID>","type":"REFERENCES|CONFLICTS","detail":{"item":"...","thisValue":"...","otherValue":"..."}}`입니다. `REFERENCES`는 `detail`을 생략하고, `CONFLICTS`는 세 문자열을 모두 지정합니다. 충돌의 저장 방향을 UUID 오름차순으로 정규화하며 방향이 바뀌면 `thisValue`/`otherValue`도 함께 맞바꿉니다. 같은 관계를 다시 등록하면 기존 행을 갱신하고 동일한 충돌 항목은 같은 UUID를 유지합니다.
-- 적재 스크립트 `scripts/load-demo-relations.py`: `demo/manifest.json`의 `references`/`conflicts`를 관리자 API로 멱등 적재합니다. 이미 있는 관계는 같은 식별 키로 갱신하고, `CONFLICTS`는 방향이 달라도 같은 문서 쌍의 같은 `item`으로 인식합니다.
+주제 간선 구현은 기본 비활성화 상태로 제공됩니다. AI 적재기에서 주제 생성·저장을 합의한 뒤 시연 환경에서 설정을 켜 검증합니다.

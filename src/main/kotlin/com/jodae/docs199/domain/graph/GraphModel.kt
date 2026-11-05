@@ -1,9 +1,12 @@
 package com.jodae.docs199.domain.graph
 
+import io.swagger.v3.oas.annotations.media.Schema
 import tools.jackson.databind.ObjectMapper
 import java.util.UUID
 
-enum class RelationType { REFERENCES, CONFLICTS }
+enum class RelationType { REFERENCES, CONFLICTS, TOPIC }
+
+enum class DeclaredRelationType { REFERENCES, CONFLICTS }
 
 data class ConflictDetail(
     val item: String,
@@ -45,7 +48,12 @@ data class GraphEdge(
     val target: UUID,
     val type: RelationType,
     val label: String,
-    val detail: ConflictDetail?,
+    @field:Schema(oneOf = [ConflictDetail::class, TopicDetail::class], nullable = true)
+    val detail: Any?,
+)
+
+data class TopicDetail(
+    val topics: List<String>,
 )
 
 data class GraphResponse(
@@ -56,7 +64,7 @@ data class GraphResponse(
 data class RelationRequest(
     val sourceDocumentId: UUID,
     val targetDocumentId: UUID,
-    val type: RelationType,
+    val type: DeclaredRelationType,
     val detail: ConflictDetail? = null,
 )
 
@@ -64,6 +72,6 @@ data class RelationResponse(
     val id: UUID,
     val source: UUID,
     val target: UUID,
-    val type: RelationType,
+    val type: DeclaredRelationType,
     val detail: ConflictDetail?,
 )

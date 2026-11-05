@@ -3,9 +3,11 @@ package com.jodae.docs199
 import com.jodae.docs199.domain.document.DocumentService
 import com.jodae.docs199.domain.document.SourceKind
 import com.jodae.docs199.domain.graph.ConflictDetail
+import com.jodae.docs199.domain.graph.DeclaredRelationType
 import com.jodae.docs199.domain.graph.GraphService
 import com.jodae.docs199.domain.graph.RelationRequest
 import com.jodae.docs199.domain.graph.RelationType
+import com.jodae.docs199.domain.graph.TopicDetail
 import com.jodae.docs199.domain.user.Clearance
 import com.jodae.docs199.domain.user.UserRepository
 import com.jodae.docs199.global.error.ApiException
@@ -25,8 +27,10 @@ import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.mock.web.MockMultipartFile
+import org.springframework.test.context.TestPropertySource
 import java.util.UUID
 
+@TestPropertySource(properties = ["app.graph.topic-edges-enabled=true"])
 class GraphIntegrationTests : IntegrationTestBase() {
     @Autowired lateinit var graph: GraphService
 
@@ -72,6 +76,106 @@ class GraphIntegrationTests : IntegrationTestBase() {
                 null,
             ).documentId!!
 
+    private fun addTopic(
+        documentId: UUID,
+        topic: String,
+        currentVersionOnly: Boolean = true,
+    ) {
+        val sql =
+            if (currentVersionOnly) {
+                """
+                SELECT dv.id FROM document_versions dv
+                JOIN documents d ON d.id = dv.document_id
+                WHERE d.id = ? AND dv.version_number = d.current_version
+                """.trimIndent()
+            } else {
+                "SELECT id FROM document_versions WHERE document_id = ? ORDER BY version_number LIMIT 1"
+            }
+        val versionId = jdbc.queryForObject(sql, UUID::class.java, documentId)!!
+        jdbc.update("INSERT INTO document_topics (document_version_id, topic) VALUES (?, ?)", versionId, topic)
+    }
+
+    @Test
+    fun topicEdgesAreStableAggregatedAndAccessFiltered() {
+        val systemAdmin = principal("system.admin@local.docs199")
+        val hr = principal("hr.staff@local.docs199")
+        val devManager = principal("dev.manager@local.docs199")
+        val source = documents.createSource(systemAdmin, SourceKind.LOCAL, "topics-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val first = createDocument(systemAdmin, source.id, "topic-first-${UUID.randomUUID()}")
+        val second = createDocument(systemAdmin, source.id, "topic-second-${UUID.randomUUID()}")
+        val hidden =
+            createDocument(
+                systemAdmin,
+                source.id,
+                "topic-hidden-${UUID.randomUUID()}",
+                Clearance.CONFIDENTIAL,
+                setOf(devManager.departmentId),
+            )
+
+        addTopic(first, "공부")
+        addTopic(first, "전공")
+        addTopic(second, "공부")
+        addTopic(second, "전공")
+        addTopic(second, "기밀 주제")
+        addTopic(hidden, "기밀 주제")
+
+        val hrGraph = graph.graph(hr, null, null)
+        val hrTopicEdge = hrGraph.edges.single { it.type == RelationType.TOPIC }
+        assertEquals(setOf(first, second), setOf(hrTopicEdge.source, hrTopicEdge.target))
+        assertEquals("공부 · 전공", hrTopicEdge.label)
+        assertEquals(TopicDetail(listOf("공부", "전공")), hrTopicEdge.detail)
+        assertFalse(hrGraph.nodes.any { it.id == hidden })
+        assertEquals(
+            hrTopicEdge.id,
+            graph
+                .graph(hr, null, null)
+                .edges
+                .single { it.type == RelationType.TOPIC }
+                .id,
+        )
+        val topicSubgraph = graph.graph(hr, first, 1)
+        assertTrue(topicSubgraph.nodes.any { it.id == second })
+        assertTrue(topicSubgraph.edges.any { it.type == RelationType.TOPIC && setOf(it.source, it.target) == setOf(first, second) })
+
+        val adminGraph = graph.graph(systemAdmin, null, null)
+        assertTrue(adminGraph.edges.any { it.type == RelationType.TOPIC && hidden in setOf(it.source, it.target) })
+    }
+
+    @Test
+    fun topicEdgesUseCurrentDocumentVersionsOnly() {
+        val systemAdmin = principal("system.admin@local.docs199")
+        val source = documents.createSource(systemAdmin, SourceKind.LOCAL, "topic-version-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val revisedPath = "topic-revised-${UUID.randomUUID()}"
+        val revised = createDocument(systemAdmin, source.id, revisedPath)
+        val other = createDocument(systemAdmin, source.id, "topic-other-${UUID.randomUUID()}")
+        addTopic(revised, "구버전 주제", currentVersionOnly = false)
+        addTopic(other, "구버전 주제")
+
+        documents.uploadOne(
+            systemAdmin,
+            source.id,
+            "$revisedPath.md",
+            MockMultipartFile("file", "$revisedPath.md", "text/markdown", "new content ${UUID.randomUUID()}".toByteArray()),
+            Clearance.PUBLIC,
+            emptySet(),
+            null,
+        )
+
+        val noOldTopic = graph.graph(systemAdmin, null, null)
+        assertFalse(
+            noOldTopic.edges.any {
+                it.type == RelationType.TOPIC && setOf(it.source, it.target) == setOf(revised, other)
+            },
+        )
+    }
+
+    @Test
+    fun aiRoleCanReplaceTopicsWithoutReadingThem() {
+        assertTrue(jdbc.queryForObject("SELECT has_table_privilege('ai_app', 'document_topics', 'INSERT')", Boolean::class.java)!!)
+        assertTrue(jdbc.queryForObject("SELECT has_table_privilege('ai_app', 'document_topics', 'DELETE')", Boolean::class.java)!!)
+        assertFalse(jdbc.queryForObject("SELECT has_table_privilege('ai_app', 'document_topics', 'SELECT')", Boolean::class.java)!!)
+    }
+
     @Test
     fun graphFiltersNodesAndEdgesAndReturnsNotFoundForHiddenCenter() {
         val systemAdmin = principal("system.admin@local.docs199")
@@ -80,7 +184,7 @@ class GraphIntegrationTests : IntegrationTestBase() {
         val visible = createDocument(systemAdmin, source.id, "visible-${UUID.randomUUID()}")
         val hidden =
             createDocument(systemAdmin, source.id, "hidden-${UUID.randomUUID()}", Clearance.CONFIDENTIAL, setOf(systemAdmin.departmentId))
-        graph.register(systemAdmin, RelationRequest(visible, hidden, RelationType.REFERENCES))
+        graph.register(systemAdmin, RelationRequest(visible, hidden, DeclaredRelationType.REFERENCES))
 
         val result = graph.graph(hr, null, null)
         assertTrue(result.nodes.any { it.id == visible })
@@ -124,10 +228,10 @@ class GraphIntegrationTests : IntegrationTestBase() {
         val left = createDocument(systemAdmin, source.id, "left-${UUID.randomUUID()}")
         val right = createDocument(systemAdmin, source.id, "right-${UUID.randomUUID()}")
         val outside = createDocument(systemAdmin, source.id, "outside-${UUID.randomUUID()}")
-        graph.register(systemAdmin, RelationRequest(left, center, RelationType.REFERENCES))
-        graph.register(systemAdmin, RelationRequest(center, right, RelationType.REFERENCES))
-        graph.register(systemAdmin, RelationRequest(left, right, RelationType.REFERENCES))
-        graph.register(systemAdmin, RelationRequest(right, outside, RelationType.REFERENCES))
+        graph.register(systemAdmin, RelationRequest(left, center, DeclaredRelationType.REFERENCES))
+        graph.register(systemAdmin, RelationRequest(center, right, DeclaredRelationType.REFERENCES))
+        graph.register(systemAdmin, RelationRequest(left, right, DeclaredRelationType.REFERENCES))
+        graph.register(systemAdmin, RelationRequest(right, outside, DeclaredRelationType.REFERENCES))
 
         val depthOne = graph.graph(systemAdmin, center, 1)
         assertEquals(setOf(center, left, right), depthOne.nodes.map { it.id }.toSet())
@@ -143,14 +247,14 @@ class GraphIntegrationTests : IntegrationTestBase() {
         val source = documents.createSource(systemAdmin, SourceKind.LOCAL, "conflict-${UUID.randomUUID()}", null, Clearance.PUBLIC)
         val first = createDocument(systemAdmin, source.id, "first-${UUID.randomUUID()}")
         val second = createDocument(systemAdmin, source.id, "second-${UUID.randomUUID()}")
-        val initial = RelationRequest(first, second, RelationType.CONFLICTS, ConflictDetail("item-a", "A", "B"))
-        val reversed = RelationRequest(second, first, RelationType.CONFLICTS, ConflictDetail("item-a", "B", "A"))
+        val initial = RelationRequest(first, second, DeclaredRelationType.CONFLICTS, ConflictDetail("item-a", "A", "B"))
+        val reversed = RelationRequest(second, first, DeclaredRelationType.CONFLICTS, ConflictDetail("item-a", "B", "A"))
         val original = graph.register(systemAdmin, initial)
         val repeat = graph.register(systemAdmin, reversed)
         val another =
             graph.register(
                 systemAdmin,
-                RelationRequest(first, second, RelationType.CONFLICTS, ConflictDetail("item-b", "C", "D")),
+                RelationRequest(first, second, DeclaredRelationType.CONFLICTS, ConflictDetail("item-b", "C", "D")),
             )
 
         assertEquals(original.id, repeat.id)
@@ -202,7 +306,7 @@ class GraphIntegrationTests : IntegrationTestBase() {
             )
 
         assertThrows(ApiException::class.java) {
-            graph.register(docAdmin, RelationRequest(visible, hidden, RelationType.REFERENCES))
+            graph.register(docAdmin, RelationRequest(visible, hidden, DeclaredRelationType.REFERENCES))
         }
     }
 }

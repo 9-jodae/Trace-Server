@@ -201,3 +201,11 @@ Spring은 청크 ID를 UUID로 해석하고 DB에서 현재 버전과 `AccessPol
 - 질문과 문서 임베딩은 같은 모델, 1024차원, `normalize=true`를 사용해야 검색 결과가 일치한다.
 
 가정: 외부 게이트웨이는 `/api/internal/**`를 404로 막으므로(`docs/deployment.md`의 "외부 공개 범위" 참고) 노트북에서는 `ssh -L 18880:localhost:18080 t09`로 터널을 연 다음 `http://localhost:18880/api/internal/embeddings`를 호출한다. 접속 권한과 비밀 헤더는 팀장에게 개별로 받는다. 문서 일괄 적재는 팀 서버에서 직접 실행해 인스턴스 역할로 Bedrock을 호출하는 것을 권장한다.
+
+## 문서 주제와 그래프 간선 (Issue #81)
+
+문서 적재 단계에서 문서별 주제 1~3개를 생성하면, AI는 해당 문서 버전의 주제를 PostgreSQL `document_topics(document_version_id, topic)`에 기록합니다. 주제는 앞뒤 공백을 제거하고 같은 버전 안에서 대소문자를 무시해 중복을 막습니다. 같은 버전을 다시 처리할 때는 해당 버전 행을 삭제한 뒤 새 주제를 넣어 멱등하게 교체합니다.
+
+Flyway V15가 `ai_app`에 `document_topics`의 `INSERT`, `DELETE` 권한만 부여합니다. `SELECT` 권한은 없습니다. 다른 테이블 권한은 변경하지 않습니다. AI 적재기는 topic 생성 기능을 기본 비활성화하고 시연 문서에 한정해 사용해야 합니다. AI 저장소의 설정 키와 기능 활성화 시점은 AI 팀이 정합니다.
+
+Spring의 `GET /api/graph`는 `GRAPH_TOPIC_EDGES_ENABLED=true`일 때만 주제 행을 조회합니다. 기본값은 `false`입니다. Spring은 접근 가능한 현재 버전만 읽고 공통 주제를 `TOPIC` 간선으로 계산합니다. 문서별 주제 결과와 간선 제한은 `docs/graph-api.md`를 참고하세요. AI 적재기는 `document_relations`를 읽거나 쓰지 않습니다.
