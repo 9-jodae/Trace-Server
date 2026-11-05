@@ -12,6 +12,11 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.http.ContentDisposition
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -24,10 +29,6 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
-import org.springframework.http.ContentDisposition
-import org.springframework.http.HttpHeaders
-import org.springframework.http.MediaType
-import org.springframework.http.ResponseEntity
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.security.MessageDigest
 import java.time.Instant
@@ -297,12 +298,21 @@ class EmployeeDocumentController(
 }
 
 private fun stream(download: DocumentDownload): ResponseEntity<StreamingResponseBody> {
-    val body = StreamingResponseBody { output -> download.input.use { it.copyTo(output) } }
-    return ResponseEntity.ok()
-        .contentType(MediaType.parseMediaType(download.contentType))
-        .contentLength(download.fileSize)
-        .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(download.fileName, Charsets.UTF_8).build().toString())
-        .body(body)
+    val body =
+        StreamingResponseBody { output ->
+            download.input.use { it.copyTo(output) }
+        }
+    val headers =
+        HttpHeaders().apply {
+            contentType = MediaType.parseMediaType(download.contentType)
+            contentLength = download.fileSize
+            contentDisposition =
+                ContentDisposition
+                    .inline()
+                    .filename(download.fileName, Charsets.UTF_8)
+                    .build()
+        }
+    return ResponseEntity(body, headers, HttpStatus.OK)
 }
 
 data class IngestionResultRequest(

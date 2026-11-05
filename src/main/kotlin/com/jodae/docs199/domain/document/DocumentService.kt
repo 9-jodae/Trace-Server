@@ -18,8 +18,8 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile
-import java.security.MessageDigest
 import java.io.InputStream
+import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
@@ -317,10 +317,19 @@ class DocumentService(
         val version =
             (if (versionId == null) detail.versions.firstOrNull() else detail.versions.firstOrNull { it.id == versionId })
                 ?: throw ApiException(ErrorCode.NOT_FOUND)
-        val extension = detail.document.extension.trim().lowercase().removePrefix(".")
+        val extension =
+            detail.document.extension
+                .trim()
+                .lowercase()
+                .removePrefix(".")
         val fileName = "${detail.document.title}.$extension"
         val contentType = if (extension == "pdf") "application/pdf" else "application/octet-stream"
-        return DocumentDownload(storage.download(version.storageKey), fileName, version.fileSize, contentType)
+        return DocumentDownload(
+            storage.download(version.storageKey),
+            fileName,
+            version.fileSize,
+            contentType,
+        )
     }
 
     fun job(
