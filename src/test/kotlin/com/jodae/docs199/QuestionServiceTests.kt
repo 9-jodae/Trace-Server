@@ -385,6 +385,28 @@ class QuestionServiceTests : IntegrationTestBase() {
     }
 
     @Test
+    fun questionResponseCapsEvidenceAtThreeItems() {
+        val admin = principal("doc.admin@local.docs199")
+        val employee = principal("hr.staff@local.docs199")
+        val source = documentService.createSource(admin, SourceKind.LOCAL, "evidence-limit-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId =
+            documentService
+                .uploadOne(admin, source.id, "limit.md", file("문서"), Clearance.PUBLIC, emptySet(), null)
+                .documentId!!
+        val chunkId = insertChunk(documents.currentVersion(documentId)!!.id, "A B C D", charStart = 0)
+        val client = FakeAgentChatClient()
+        client.nextEvidence =
+            listOf("A", "B", "C", "D").map { quote ->
+                AgentEvidence(chunkId.toString(), "임시 출처", quote = quote)
+            }
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+
+        val response = service.ask(employee, null, "질문")
+
+        assertEquals(listOf("A", "B", "C"), response.evidence.map { it.quote })
+    }
+
+    @Test
     fun askOnAnotherUsersConversationIsRejected() {
         val hr = principal("hr.staff@local.docs199")
         val dev = principal("dev.manager@local.docs199")

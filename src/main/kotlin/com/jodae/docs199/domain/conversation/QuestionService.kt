@@ -202,10 +202,11 @@ class QuestionService(
         principal: UserPrincipal,
         evidence: List<AgentEvidence>,
     ): List<QuestionEvidenceView> {
+        val limitedEvidence = evidence.take(3)
         val scope = policy.scope(principal)
-        val parsedIds = evidence.map { runCatching { UUID.fromString(it.chunkId) }.getOrNull() }
+        val parsedIds = limitedEvidence.map { runCatching { UUID.fromString(it.chunkId) }.getOrNull() }
         val verified = fetchVerifiedChunks(scope, parsedIds.filterNotNull().distinct())
-        return evidence
+        return limitedEvidence
             .mapNotNull { item ->
                 val chunkId = runCatching { UUID.fromString(item.chunkId) }.getOrNull() ?: return@mapNotNull null
                 val chunk = verified[chunkId] ?: return@mapNotNull null
@@ -228,7 +229,7 @@ class QuestionService(
                     charStart = offsets?.first,
                     charEnd = offsets?.second,
                 )
-            }.take(3)
+            }
     }
 
     private fun verifiedQuoteOffsets(
