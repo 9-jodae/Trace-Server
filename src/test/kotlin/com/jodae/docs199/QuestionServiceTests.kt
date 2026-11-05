@@ -8,6 +8,7 @@ import com.jodae.docs199.domain.conversation.AgentChatClient
 import com.jodae.docs199.domain.conversation.AgentChatRequest
 import com.jodae.docs199.domain.conversation.AgentChatResponse
 import com.jodae.docs199.domain.conversation.AgentEvidence
+import com.jodae.docs199.domain.conversation.AgentKeyword
 import com.jodae.docs199.domain.conversation.AgentSource
 import com.jodae.docs199.domain.conversation.ConversationRepository
 import com.jodae.docs199.domain.conversation.ConversationService
@@ -48,6 +49,7 @@ import kotlin.system.measureTimeMillis
 class FakeAgentChatClient : AgentChatClient {
     var nextSources: List<AgentSource> = emptyList()
     var nextEvidence: List<AgentEvidence> = emptyList()
+    var nextKeywords: List<AgentKeyword> = emptyList()
     var nextAnswer: String = "답변"
     var failWith: ApiException? = null
     lateinit var lastRequest: AgentChatRequest
@@ -60,6 +62,7 @@ class FakeAgentChatClient : AgentChatClient {
             answer = nextAnswer,
             sources = nextSources,
             evidence = nextEvidence,
+            keywords = nextKeywords,
         )
     }
 }
@@ -73,7 +76,7 @@ class AgentChatHttpTests {
             received.set(exchange.requestBody.bufferedReader().readText())
             val reply =
                 """
-                {"threadId":"thread","answer":"ok","evidence":[{"chunkId":"00000000-0000-0000-0000-000000000001","source":"source","documentId":null,"versionId":null,"quote":"핵심 문구","charStart":10,"charEnd":15}]}
+                {"threadId":"thread","answer":"ok","evidence":[{"chunkId":"00000000-0000-0000-0000-000000000001","source":"source","documentId":null,"versionId":null,"quote":"핵심 문구","charStart":10,"charEnd":15}],"keywords":[{"text":"연차 이월","chunkId":"00000000-0000-0000-0000-000000000001"}]}
                 """.trimIndent().toByteArray()
             exchange.responseHeaders.set("Content-Type", "application/json")
             exchange.sendResponseHeaders(200, reply.size.toLong())
@@ -90,6 +93,7 @@ class AgentChatHttpTests {
                     )
                 assertEquals("핵심 문구", response.evidence.single().quote)
                 assertEquals(null, response.evidence.single().documentId)
+                assertEquals("연차 이월", response.keywords.single().text)
                 val body = received.get()
                 assertTrue(body.contains("\"departmentId\":\"$departmentId\""))
                 assertTrue(body.contains("\"position\":\"MANAGER\""))
@@ -522,6 +526,45 @@ class QuestionServiceTests : IntegrationTestBase() {
         val response = service.ask(employee, null, "질문")
 
         assertEquals(listOf("A", "B", "C"), response.evidence.map { it.quote })
+    }
+
+    @Test
+    fun keywordsRequireAccessibleCurrentChunkAndExactTextAndAreDeduplicatedAndCapped() {
+        val admin = principal("doc.admin@local.docs199")
+        val employee = principal("hr.staff@local.docs199")
+        val dev = principal("dev.manager@local.docs199")
+        val source = documentService.createSource(admin, SourceKind.LOCAL, "keyword-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val visibleDocumentId =
+            documentService.uploadOne(admin, source.id, "keywords.md", file("공개 문서"), Clearance.PUBLIC, emptySet(), null).documentId!!
+        val hiddenDocumentId =
+            documentService
+                .uploadOne(
+                    admin,
+                    source.id,
+                    "hidden-keywords.md",
+                    file("비공개 문서"),
+                    Clearance.CONFIDENTIAL,
+                    setOf(dev.departmentId),
+                    null,
+                ).documentId!!
+        val visibleChunkId = insertChunk(documents.currentVersion(visibleDocumentId)!!.id, "연차 이월, 최대 5일, 3월 31일")
+        val hiddenChunkId = insertChunk(documents.currentVersion(hiddenDocumentId)!!.id, "기밀 키워드")
+        val client = FakeAgentChatClient()
+        client.nextKeywords =
+            listOf(
+                AgentKeyword("연차 이월", visibleChunkId.toString()),
+                AgentKeyword("연차 이월", visibleChunkId.toString()),
+                AgentKeyword("기밀 키워드", hiddenChunkId.toString()),
+                AgentKeyword("없는 문구", visibleChunkId.toString()),
+                AgentKeyword("최대 5일", visibleChunkId.toString()),
+                AgentKeyword("3월 31일", visibleChunkId.toString()),
+            )
+        val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
+
+        val response = service.ask(employee, null, "연차 이월은?")
+
+        assertEquals(listOf("연차 이월", "최대 5일", "3월 31일"), response.keywords.map { it.text })
+        assertTrue(response.keywords.all { it.chunkId == visibleChunkId.toString() })
     }
 
     @Test

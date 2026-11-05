@@ -233,10 +233,13 @@ Authorization: Bearer <token>
   "answer": "연차 이월 한도는 5일입니다.",
   "sources": [{"id": "<chunk-uuid>", "text": "...", "source": "취업규칙", "documentId": "<uuid>", "documentTitle": "취업규칙", "versionId": "<uuid>", "charStart": 120, "charEnd": 160}],
   "evidence": [{"chunkId": "<chunk-uuid>", "source": "취업규칙", "documentId": "<uuid>", "versionId": "<uuid>", "quote": "연차는 최대 5일까지 이월할 수 있다.", "charStart": 120, "charEnd": 140}],
+  "keywords": [{"text": "연차 이월", "chunkId": "<chunk-uuid>"}, {"text": "최대 5일", "chunkId": "<chunk-uuid>"}],
   "failedSources": [],
   "fallbackReason": null
 }
 ```
+
+`keywords`는 AI가 중요도순으로 보낸 최대 3개 문구입니다. Spring은 `chunkId`의 UUID, 최신 버전, 사용자 접근 권한을 확인하고 문구가 해당 청크 본문에 그대로 있을 때만 반환합니다. 중복 문구는 제거하며 검증할 항목이 없으면 `[]`입니다. 핵심 문장은 기존 `evidence[].quote`를 사용합니다. 키워드와 근거 문구는 대화 이력에 저장되지 않아 이전 대화를 다시 열면 복원되지 않습니다.
 
 AI가 Spring에 보내는 evidence의 `documentId`, `versionId`, `charStart`, `charEnd`는 `null`일 수 있습니다. Spring 응답의 `chunkId`, `source`, `documentId`, `versionId`, `quote`는 DB 검증을 통과한 실제 값으로 채워지며 null이 아닙니다. 응답의 `charStart`와 `charEnd`는 위치를 계산할 수 없으면 둘 다 `null`입니다. 항목은 최대 3개이고, 검증 가능한 항목이 없으면 `[]`입니다. `quote`는 DB에서 확인한 청크 본문에 그대로 포함된 문구만 반환합니다.
 

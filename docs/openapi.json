@@ -1254,6 +1254,17 @@
           }
         }
       },
+      "QuestionKeywordView" : {
+        "type" : "object",
+        "properties" : {
+          "text" : {
+            "type" : "string"
+          },
+          "chunkId" : {
+            "type" : "string"
+          }
+        }
+      },
       "QuestionResponse" : {
         "type" : "object",
         "properties" : {
@@ -1291,6 +1302,12 @@
           },
           "fallbackReason" : {
             "type" : [ "string", "null" ]
+          },
+          "keywords" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/QuestionKeywordView"
+            }
           }
         }
       },
