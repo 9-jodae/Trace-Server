@@ -12,6 +12,11 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.http.ContentDisposition
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -24,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDate
@@ -89,6 +95,7 @@ class AdminDocumentController(
         @PathVariable sourceId: UUID,
         @RequestPart files: List<MultipartFile>,
         @RequestParam paths: List<String>,
+        @RequestParam(required = false) titles: List<String>?,
         @RequestParam(required = false) clearance: Clearance?,
         @RequestParam(required = false) departmentIds: Set<UUID>?,
         @RequestParam(required = false) minimumPosition: Position?,
@@ -98,6 +105,9 @@ class AdminDocumentController(
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) sourceModifiedAt: Instant?,
     ): ApiResponse<List<UploadResult>> {
         if (files.size != paths.size) throw ApiException(ErrorCode.INVALID_INPUT, "파일과 상대 경로의 개수가 다릅니다")
+        if (titles != null && (titles.size != files.size || titles.any(String::isBlank))) {
+            throw ApiException(ErrorCode.INVALID_INPUT, "표시 제목은 파일과 같은 개수로 입력하고 비워 둘 수 없습니다")
+        }
         return ApiResponse.ok(
             files.indices.map {
                 service.uploadOne(
@@ -112,6 +122,7 @@ class AdminDocumentController(
                     author,
                     authoredAt,
                     sourceModifiedAt,
+                    titles?.get(it),
                 )
             },
         )
@@ -202,6 +213,19 @@ class AdminDocumentController(
         ),
     )
 
+    @GetMapping("/documents/{id}/download")
+    fun download(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable id: UUID,
+    ): ResponseEntity<StreamingResponseBody> = stream(service.download(principal, id, null, true))
+
+    @GetMapping("/documents/{id}/versions/{versionId}/download")
+    fun downloadVersion(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable id: UUID,
+        @PathVariable versionId: UUID,
+    ): ResponseEntity<StreamingResponseBody> = stream(service.download(principal, id, versionId, true))
+
     @GetMapping("/ingestion-jobs/{id}")
     fun job(
         @CurrentUser principal: UserPrincipal,
@@ -253,11 +277,42 @@ class EmployeeDocumentController(
         ),
     )
 
+    @GetMapping("/{id}/download")
+    fun download(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable id: UUID,
+    ): ResponseEntity<StreamingResponseBody> = stream(service.download(principal, id, null, false))
+
+    @GetMapping("/{id}/versions/{versionId}/download")
+    fun downloadVersion(
+        @CurrentUser principal: UserPrincipal,
+        @PathVariable id: UUID,
+        @PathVariable versionId: UUID,
+    ): ResponseEntity<StreamingResponseBody> = stream(service.download(principal, id, versionId, false))
+
     @GetMapping("/{id}/status")
     fun status(
         @CurrentUser principal: UserPrincipal,
         @PathVariable id: UUID,
     ) = ApiResponse.ok(service.detail(principal, id, false).job)
+}
+
+private fun stream(download: DocumentDownload): ResponseEntity<StreamingResponseBody> {
+    val body =
+        StreamingResponseBody { output ->
+            download.input.use { it.copyTo(output) }
+        }
+    val headers =
+        HttpHeaders().apply {
+            contentType = MediaType.parseMediaType(download.contentType)
+            contentLength = download.fileSize
+            contentDisposition =
+                ContentDisposition
+                    .inline()
+                    .filename(download.fileName, Charsets.UTF_8)
+                    .build()
+        }
+    return ResponseEntity(body, headers, HttpStatus.OK)
 }
 
 data class IngestionResultRequest(

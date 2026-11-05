@@ -4,6 +4,8 @@ import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.scheduling.annotation.Scheduled
@@ -18,6 +20,13 @@ import java.time.Duration
 import java.time.LocalDate
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
+
+@ConfigurationProperties("app.ai")
+data class IngestionProperties(
+    val ingestionMode: IngestionMode = IngestionMode.MOCK,
+)
+
+enum class IngestionMode { MOCK, HTTP }
 
 data class VersionCreated(
     val versionId: UUID,
@@ -36,10 +45,11 @@ interface IngestionClient {
 
 @Configuration
 @EnableScheduling
+@EnableConfigurationProperties(IngestionProperties::class)
 class IngestionSchedulingConfig
 
 @Component
-@ConditionalOnProperty(name = ["app.ai.mode"], havingValue = "mock")
+@ConditionalOnProperty(name = ["app.ai.ingestion-mode"], havingValue = "mock")
 class MockIngestionClient(
     private val jobs: JobUpdater,
 ) : IngestionClient {
@@ -58,7 +68,7 @@ class MockIngestionClient(
 }
 
 @Component
-@ConditionalOnProperty(name = ["app.ai.mode"], havingValue = "http")
+@ConditionalOnProperty(name = ["app.ai.ingestion-mode"], havingValue = "http")
 class HttpIngestionClient(
     @Value("\${app.ai.base-url}") baseUrl: String,
     @Value("\${app.ai.timeout-seconds}") timeoutSeconds: Long,

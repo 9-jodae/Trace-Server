@@ -18,8 +18,8 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile
+import java.io.InputStream
 import java.security.MessageDigest
-import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
@@ -39,6 +39,13 @@ data class DocumentDetail(
     val job: JobRecord?,
 )
 
+data class DocumentDownload(
+    val input: InputStream,
+    val fileName: String,
+    val fileSize: Long,
+    val contentType: String,
+)
+
 @Service
 class DocumentService(
     private val repository: DocumentRepository,
@@ -48,6 +55,7 @@ class DocumentService(
     private val events: ApplicationEventPublisher,
     private val cleanupQueue: StorageCleanupQueue,
     @Value("\${app.documents.allowed-extensions:pdf,md}") allowedExtensions: String,
+    @Value("\${app.documents.revision.enabled:true}") private val revisionEnabled: Boolean = true,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val allowed =
@@ -87,6 +95,7 @@ class DocumentService(
         author: String? = null,
         authoredAt: LocalDate? = null,
         sourceModifiedAt: Instant? = null,
+        displayTitle: String? = null,
     ): UploadResult {
         val normalized = path.replace('\\', '/').trim('/')
         val parts = normalized.split('/')
@@ -100,14 +109,65 @@ class DocumentService(
         if (extension !in allowed) return UploadResult(path, null, null, "EXCLUDED", "허용되지 않는 확장자")
         val source = repository.source(sourceId) ?: throw ApiException(ErrorCode.NOT_FOUND)
         if (source.kind == SourceKind.NOTION) throw ApiException(ErrorCode.INVALID_INPUT)
-        repository.lockSource(sourceId)
+        val title =
+            displayTitle?.trim()?.takeIf(String::isNotEmpty)
+                ?: normalized.substringAfterLast('/').substringBeforeLast('.')
         val bytes = file.bytes
+        return upsertDocument(
+            principal = principal,
+            sourceId = sourceId,
+            externalId = normalized,
+            title = title,
+            displayPath = normalized,
+            extension = extension,
+            bytes = bytes,
+            contentType = file.contentType ?: "application/octet-stream",
+            clearance = clearance,
+            departments = departments,
+            minimumPosition = minimumPosition,
+            ownerDepartmentId = ownerDepartmentId,
+            author = author,
+            authoredAt = authoredAt,
+            sourceModifiedAt = sourceModifiedAt,
+            metadataTitle = displayTitle?.trim()?.takeIf(String::isNotEmpty),
+        )
+    }
+
+    /**
+     * Creates or revises a document from source-independent content. HTTP multipart handling and
+     * source-specific path validation belong in the caller; external IDs are not display paths.
+     */
+    @Transactional
+    fun upsertDocument(
+        principal: UserPrincipal,
+        sourceId: UUID,
+        externalId: String,
+        title: String,
+        displayPath: String,
+        extension: String,
+        bytes: ByteArray,
+        contentType: String,
+        clearance: Clearance? = null,
+        departments: Set<UUID>? = null,
+        minimumPosition: Position? = null,
+        ownerDepartmentId: UUID? = null,
+        author: String? = null,
+        authoredAt: LocalDate? = null,
+        sourceModifiedAt: Instant? = null,
+        metadataTitle: String? = null,
+    ): UploadResult {
+        val source = repository.source(sourceId) ?: throw ApiException(ErrorCode.NOT_FOUND)
+        repository.lockSource(sourceId)
         val hash = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        val previous = repository.documentByPath(sourceId, normalized)
+        val previous = repository.documentByExternalId(sourceId, externalId)
         val latest = previous?.let { repository.currentVersion(it.id) }
         if (latest?.contentHash == hash && previous.deletedAt == null) {
-            return UploadResult(normalized, previous.id, latest.versionNumber, "UNCHANGED")
+            if (author != null || authoredAt != null || sourceModifiedAt != null || metadataTitle != null) {
+                repository.updateMetadata(previous.id, author, authoredAt, sourceModifiedAt, metadataTitle)
+            }
+            return UploadResult(displayPath, previous.id, latest.versionNumber, "UNCHANGED")
         }
+        if (previous != null && !revisionEnabled) throw ApiException(ErrorCode.REVISION_DISABLED)
         val documentId = previous?.id ?: UUID.randomUUID()
         val number = (previous?.currentVersion ?: 0) + 1
         val effectiveDepartments = departments ?: source.defaultDepartmentId?.let(::setOf) ?: emptySet()
@@ -119,9 +179,9 @@ class DocumentService(
                 DocumentRecord(
                     documentId,
                     sourceId,
-                    normalized,
-                    parts.last().substringBeforeLast('.'),
-                    normalized,
+                    externalId,
+                    title,
+                    displayPath,
                     extension,
                     null,
                     author,
@@ -136,6 +196,7 @@ class DocumentService(
             )
             repository.setDepartments(documentId, effectiveDepartments)
         } else {
+            repository.updateDocumentDisplay(documentId, title, displayPath, extension)
             if (clearance != null || departments != null || minimumPosition != null) {
                 repository.updateAccess(documentId, clearance ?: previous.clearance, minimumPosition ?: previous.minimumPosition)
                 if (departments != null) repository.setDepartments(documentId, departments)
@@ -169,13 +230,13 @@ class DocumentService(
                 }
             },
         )
-        storage.upload(key, bytes.inputStream(), bytes.size.toLong(), file.contentType ?: "application/octet-stream")
+        storage.upload(key, bytes.inputStream(), bytes.size.toLong(), contentType)
         repository.addVersion(
             VersionRecord(versionId, documentId, number, key, bytes.size.toLong(), hash, principal.userId, Instant.now()),
         )
         repository.updateVersion(documentId, number)
         events.publishEvent(VersionCreated(versionId))
-        return UploadResult(normalized, documentId, number, "CREATED")
+        return UploadResult(displayPath, documentId, number, "CREATED")
     }
 
     fun list(
@@ -243,9 +304,34 @@ class DocumentService(
         id: UUID,
         admin: Boolean,
     ): String {
+        detail(principal, id, admin)
+        val basePath = if (admin) "/api/admin/documents" else "/api/documents"
+        return "$basePath/$id/download"
+    }
+
+    fun download(
+        principal: UserPrincipal,
+        id: UUID,
+        versionId: UUID?,
+        admin: Boolean,
+    ): DocumentDownload {
         val detail = detail(principal, id, admin)
-        val version = detail.versions.firstOrNull() ?: throw ApiException(ErrorCode.NOT_FOUND)
-        return storage.presignedDownloadUrl(version.storageKey, Duration.ofMinutes(15))
+        val version =
+            (if (versionId == null) detail.versions.firstOrNull() else detail.versions.firstOrNull { it.id == versionId })
+                ?: throw ApiException(ErrorCode.NOT_FOUND)
+        val extension =
+            detail.document.extension
+                .trim()
+                .lowercase()
+                .removePrefix(".")
+        val fileName = "${detail.document.title}.$extension"
+        val contentType = if (extension == "pdf") "application/pdf" else "application/octet-stream"
+        return DocumentDownload(
+            storage.download(version.storageKey),
+            fileName,
+            version.fileSize,
+            contentType,
+        )
     }
 
     fun job(

@@ -44,6 +44,7 @@ data class DocumentRecord(
     val deletedAt: Instant?,
     val ownerDepartmentId: UUID? = null,
     val sourceModifiedAt: Instant? = null,
+    val searchable: Boolean = false,
 )
 
 data class VersionRecord(
@@ -64,6 +65,7 @@ data class JobRecord(
     val errorMessage: String?,
     val startedAt: Instant?,
     val finishedAt: Instant?,
+    val searchable: Boolean = false,
 )
 
 data class DocumentFilter(
@@ -103,7 +105,15 @@ class DocumentRepository(
     fun sources(): List<SourceRecord> = jdbc.query("SELECT * FROM sources ORDER BY created_at DESC", ::mapSource)
 
     fun document(id: UUID): DocumentRecord? =
-        jdbc.query("SELECT * FROM documents WHERE id = ? AND deleted_at IS NULL", ::mapDocument, id).firstOrNull()
+        jdbc
+            .query(
+                """SELECT d.*, EXISTS (
+                   SELECT 1 FROM document_versions v JOIN chunks c ON c.document_version_id = v.id
+                   WHERE v.document_id = d.id AND v.version_number = d.current_version
+               ) AS searchable FROM documents d WHERE d.id = ? AND d.deleted_at IS NULL""",
+                ::mapDocument,
+                id,
+            ).firstOrNull()
 
     fun documents(ids: Set<UUID>): Map<UUID, DocumentRecord> {
         if (ids.isEmpty()) return emptyMap()
@@ -113,11 +123,11 @@ class DocumentRepository(
             .associateBy { it.id }
     }
 
-    fun documentByPath(
+    fun documentByExternalId(
         sourceId: UUID,
-        path: String,
+        externalId: String,
     ): DocumentRecord? =
-        jdbc.query("SELECT * FROM documents WHERE source_id = ? AND external_id = ?", ::mapDocument, sourceId, path).firstOrNull()
+        jdbc.query("SELECT * FROM documents WHERE source_id = ? AND external_id = ?", ::mapDocument, sourceId, externalId).firstOrNull()
 
     fun insertDocument(document: DocumentRecord) {
         jdbc.update(
@@ -141,6 +151,21 @@ class DocumentRepository(
         )
     }
 
+    fun updateDocumentDisplay(
+        id: UUID,
+        title: String,
+        relativePath: String,
+        extension: String,
+    ) {
+        jdbc.update(
+            "UPDATE documents SET title = ?, relative_path = ?, extension = ?, updated_at = now() WHERE id = ?",
+            title,
+            relativePath,
+            extension,
+            id,
+        )
+    }
+
     fun updateOwnerDepartment(
         id: UUID,
         ownerDepartmentId: UUID?,
@@ -153,13 +178,15 @@ class DocumentRepository(
         author: String?,
         authoredAt: LocalDate?,
         sourceModifiedAt: Instant?,
+        title: String? = null,
     ) {
         jdbc.update(
             """UPDATE documents SET author = COALESCE(?, author), authored_at = COALESCE(?, authored_at),
-               source_modified_at = COALESCE(?, source_modified_at), updated_at = now() WHERE id = ?""",
+               source_modified_at = COALESCE(?, source_modified_at), title = COALESCE(?, title), updated_at = now() WHERE id = ?""",
             author,
             authoredAt,
             sourceModifiedAt?.let(Timestamp::from),
+            title,
             id,
         )
     }
@@ -319,10 +346,31 @@ class DocumentRepository(
         jdbc.update("UPDATE storage_cleanup_jobs SET attempts = attempts + 1, last_attempt_at = now() WHERE id = ?", id)
     }
 
-    fun job(id: UUID): JobRecord? = jdbc.query("SELECT * FROM ingestion_jobs WHERE id = ?", ::mapJob, id).firstOrNull()
+    fun job(id: UUID): JobRecord? =
+        jdbc
+            .query(
+                """SELECT j.*, EXISTS (
+                   SELECT 1 FROM document_versions cv JOIN chunks c ON c.document_version_id = cv.id
+                   WHERE cv.document_id = d.id AND cv.version_number = d.current_version
+               ) AS searchable
+               FROM ingestion_jobs j JOIN document_versions v ON v.id = j.version_id
+               JOIN documents d ON d.id = v.document_id WHERE j.id = ?""",
+                ::mapJob,
+                id,
+            ).firstOrNull()
 
     fun jobForVersion(versionId: UUID): JobRecord? =
-        jdbc.query("SELECT * FROM ingestion_jobs WHERE version_id = ?", ::mapJob, versionId).firstOrNull()
+        jdbc
+            .query(
+                """SELECT j.*, EXISTS (
+                   SELECT 1 FROM document_versions cv JOIN chunks c ON c.document_version_id = cv.id
+                   WHERE cv.document_id = d.id AND cv.version_number = d.current_version
+               ) AS searchable
+               FROM ingestion_jobs j JOIN document_versions v ON v.id = j.version_id
+               JOIN documents d ON d.id = v.document_id WHERE j.version_id = ?""",
+                ::mapJob,
+                versionId,
+            ).firstOrNull()
 
     fun transitionJob(
         id: UUID,
@@ -401,7 +449,17 @@ class DocumentRepository(
         }
         val from = " FROM documents d" + where
         val total = named.queryForObject("SELECT count(*)" + from, p, Long::class.java) ?: 0L
-        val rows = named.query("SELECT d.*" + from + " ORDER BY d.created_at DESC, d.id LIMIT :limit OFFSET :offset", p, ::mapDocument)
+        val rows =
+            named.query(
+                """SELECT d.*, EXISTS (
+                    SELECT 1 FROM document_versions v JOIN chunks c ON c.document_version_id = v.id
+                    WHERE v.document_id = d.id AND v.version_number = d.current_version
+                ) AS searchable""" +
+                    from +
+                    " ORDER BY d.created_at DESC, d.id LIMIT :limit OFFSET :offset",
+                p,
+                ::mapDocument,
+            )
         return rows to total
     }
 
@@ -436,6 +494,7 @@ class DocumentRepository(
         rs.getTimestamp("deleted_at")?.toInstant(),
         rs.getObject("owner_department_id", UUID::class.java),
         rs.getTimestamp("source_modified_at")?.toInstant(),
+        runCatching { rs.getBoolean("searchable") }.getOrDefault(false),
     )
 
     private fun mapVersion(
@@ -462,5 +521,6 @@ class DocumentRepository(
         rs.getString("error_message"),
         rs.getTimestamp("started_at")?.toInstant(),
         rs.getTimestamp("finished_at")?.toInstant(),
+        runCatching { rs.getBoolean("searchable") }.getOrDefault(false),
     )
 }

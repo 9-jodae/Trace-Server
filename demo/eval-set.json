@@ -328,7 +328,7 @@
         {
           "documentId": "discount-exception",
           "section": "제2조 승인 한도",
-          "excerpt": "영업본부장 결재"
+          "excerpt": "영업본부장"
         }
       ],
       "shouldAnswerAccounts": [
@@ -426,7 +426,7 @@
         {
           "documentId": "discipline-policy",
           "section": "제2조 심의",
-          "excerpt": "재적 과반수 찬성"
+          "excerpt": "재적 과반수"
         }
       ],
       "shouldAnswerAccounts": [

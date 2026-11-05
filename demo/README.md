@@ -2,6 +2,20 @@
 
 **모아온**은 이 데모만을 위한 가상 회사입니다. 문서 본문과 사람 이름, 수치는 모두 허구입니다. 문서 19개 파일(논리 문서 18개), 질문 26개를 제공합니다.
 
+## 매니페스트 자동 적재
+
+`scripts/load-demo.py`는 이 디렉터리의 `manifest.json` 순서로 문서를 관리 API에 멱등 적재합니다. 출장비 규정은 같은 문서 경로에 v1 다음 v2를 개정으로 등록합니다. 관리자 비밀번호는 `DEMO_PASSWORD` 환경 변수로만 전달하며, 스크립트 출력에 비밀번호·토큰·본문·Presigned URL을 남기지 않습니다. HTTPS 또는 localhost만 대상으로 허용합니다.
+
+```bash
+read -rs DEMO_PASSWORD; export DEMO_PASSWORD
+python3 scripts/load-demo.py http://localhost:8080
+unset DEMO_PASSWORD
+```
+
+같은 명령을 다시 실행해도 같은 경로와 해시의 문서·버전은 건너뜁니다. 마지막에 논리 문서 수, 매니페스트 버전 수, 처리 상태를 요약합니다. 시연 환경 실행 전에는 [시연 진행 문서](../docs/demo-runbook.md)의 체크리스트를 따릅니다.
+
+현재 관리 API는 매니페스트의 소스, 표시 제목, 부서 접근 범위, 등급, 작성자, 작성일을 받을 수 있어 적재기가 해당 값을 전송합니다. `documentType`은 업로드 API가 받지 않으며 후속 처리에 맡겨집니다.
+
 ## 구성
 
 | 위치 | 내용 |

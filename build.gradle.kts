@@ -43,6 +43,7 @@ dependencies {
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
     implementation("io.minio:minio:9.0.3")
     implementation("software.amazon.awssdk:s3:2.57.8")
+    implementation("software.amazon.awssdk:bedrockruntime:2.57.8")
     runtimeOnly("org.postgresql:postgresql")
     testImplementation("org.springframework.boot:spring-boot-starter-actuator-test")
     testImplementation("org.springframework.boot:spring-boot-starter-data-jpa-test")

@@ -1,5 +1,6 @@
 package com.jodae.docs199.domain.conversation
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.jodae.docs199.global.response.ApiResponse
 import com.jodae.docs199.global.security.CurrentUser
 import com.jodae.docs199.global.security.UserPrincipal
@@ -12,10 +13,21 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import java.time.LocalDate
 import java.util.UUID
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class SearchFilters(
+    val extensions: List<String>? = null,
+    val documentTypes: List<String>? = null,
+    val sourceKinds: List<String>? = null,
+    val authoredFrom: LocalDate? = null,
+    val authoredTo: LocalDate? = null,
+)
 
 data class QuestionRequest(
     @field:NotBlank(message = "질문을 입력하세요") val message: String,
+    val filters: SearchFilters? = null,
 )
 
 @RestController
@@ -48,12 +60,12 @@ class ConversationController(
     fun askNew(
         @CurrentUser principal: UserPrincipal,
         @Valid @RequestBody request: QuestionRequest,
-    ) = ApiResponse.ok(questions.ask(principal, null, request.message))
+    ) = ApiResponse.ok(questions.ask(principal, null, request.message, request.filters))
 
     @PostMapping("/{id}/messages")
     fun ask(
         @CurrentUser principal: UserPrincipal,
         @PathVariable id: UUID,
         @Valid @RequestBody request: QuestionRequest,
-    ) = ApiResponse.ok(questions.ask(principal, id, request.message))
+    ) = ApiResponse.ok(questions.ask(principal, id, request.message, request.filters))
 }

@@ -8,8 +8,8 @@ spring:
   jpa:
     hibernate.ddl-auto: validate
     open-in-view: false
-  servlet.multipart.max-file-size: ${MAX_UPLOAD_SIZE:20MB}
-  servlet.multipart.max-request-size: ${MAX_UPLOAD_SIZE:20MB}
+  servlet.multipart.max-file-size: ${MAX_UPLOAD_FILE_SIZE:${MAX_UPLOAD_SIZE:20MB}}
+  servlet.multipart.max-request-size: ${MAX_UPLOAD_REQUEST_SIZE:${MAX_UPLOAD_SIZE:100MB}}
 management.endpoints.web.exposure.include: health,info
 management.endpoint.health.show-details: never
 logging.pattern.level: "%5p [requestId=%X{requestId:-}]"
@@ -19,8 +19,14 @@ app:
   demo-seed: true
   demo-password: ${DEMO_PASSWORD:local-demo-1234}
   internal-secret: ${INTERNAL_SECRET:local-internal-secret-change-before-production}
+  embedding-proxy:
+    enabled: ${EMBEDDING_PROXY_ENABLED:false}
+    region: ${BEDROCK_EMBEDDING_REGION:ap-northeast-1}
+    model-id: ${BEDROCK_EMBEDDING_MODEL_ID:amazon.titan-embed-text-v2:0}
   documents:
     allowed-extensions: ${ALLOWED_EXTENSIONS:pdf,md}
+    revision:
+      enabled: ${DOCUMENT_REVISION_ENABLED:true}
   jwt-secret: ${JWT_SECRET:local-development-secret-change-before-production-123456}
   cors-origins: ${CORS_ORIGINS:http://localhost:3000}
   storage:
@@ -34,14 +40,20 @@ app:
       prefix: ${S3_PREFIX:uploads/}
   ai:
     mode: ${AI_MODE:mock}
+    ingestion-mode: ${AI_INGEST_MODE:${AI_MODE:mock}}
+    known-conflicts-enabled: ${AI_KNOWN_CONFLICTS_ENABLED:true}
     base-url: ${AI_BASE_URL:http://localhost:8000}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     retry-count: ${AI_RETRY_COUNT:0}
     chat-timeout-seconds: ${AI_CHAT_TIMEOUT_SECONDS:70}
+  graph:
+    topic-edges-enabled: ${GRAPH_TOPIC_EDGES_ENABLED:false}
+    max-topic-edges: ${GRAPH_MAX_TOPIC_EDGES:1000}
 ---
 spring.config.activate.on-profile: local
 springdoc.api-docs.enabled: true
 springdoc.swagger-ui.enabled: true
+springdoc.paths-to-exclude: /api/internal/**, /api/dev/**
 app.storage.type: minio
 ---
 spring.config.activate.on-profile: prod
@@ -64,6 +76,7 @@ app:
       prefix: ${S3_PREFIX:uploads/}
   ai:
     mode: ${AI_MODE:mock}
+    ingestion-mode: ${AI_INGEST_MODE:${AI_MODE:mock}}
     base-url: ${AI_BASE_URL:http://ai:8000}
 ---
 spring.config.activate.on-profile: test

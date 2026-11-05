@@ -1,10 +1,15 @@
 package com.jodae.docs199.domain.conversation
 
+import com.jodae.docs199.domain.document.DocumentType
+import com.jodae.docs199.domain.document.SourceKind
+import com.jodae.docs199.domain.graph.GraphRepository
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.security.AccessPolicy
 import com.jodae.docs199.global.security.AccessScope
 import com.jodae.docs199.global.security.UserPrincipal
+import io.swagger.v3.oas.annotations.media.Schema
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.PreparedStatementSetter
 import org.springframework.jdbc.core.RowMapper
@@ -31,11 +36,30 @@ data class EvidenceSourceView(
 data class QuestionResponse(
     val conversationId: UUID,
     val answer: String,
+    @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+    val answerType: AnswerType,
     val route: String?,
     val contextProbability: Double?,
     val sources: List<EvidenceSourceView>,
+    val evidence: List<QuestionEvidenceView>,
     val failedSources: List<String>,
     val fallbackReason: String?,
+    val keywords: List<QuestionKeywordView> = emptyList(),
+)
+
+data class QuestionEvidenceView(
+    val chunkId: String,
+    val source: String,
+    val documentId: UUID,
+    val versionId: UUID,
+    val quote: String,
+    val charStart: Int?,
+    val charEnd: Int?,
+)
+
+data class QuestionKeywordView(
+    val text: String,
+    val chunkId: String,
 )
 
 private data class VerifiedChunk(
@@ -55,12 +79,24 @@ class QuestionService(
     private val jdbc: JdbcTemplate,
     private val policy: AccessPolicy,
     private val client: AgentChatClient,
+    private val graphRepository: GraphRepository,
+    @Value("\${app.ai.known-conflicts-enabled:true}") private val knownConflictsEnabled: Boolean = true,
+    @Value("\${app.documents.allowed-extensions:pdf,md}") allowedExtensions: String = "pdf,md",
 ) {
+    private val allowedExtensions =
+        allowedExtensions
+            .split(',')
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+
     fun ask(
         principal: UserPrincipal,
         conversationId: UUID?,
         message: String,
+        filters: SearchFilters? = null,
     ): QuestionResponse {
+        validateFilters(filters)
         val conversation =
             if (conversationId == null) {
                 conversations.create(principal, message.take(80))
@@ -70,25 +106,82 @@ class QuestionService(
                 existing
             }
         conversations.addMessage(principal, conversation.id, MessageRole.USER, message)
+        val scope = policy.scope(principal)
+        val accessScope = AgentAccessScope(scope.departmentId, scope.position.name, scope.clearance.name, scope.isAdmin)
+        val knownConflicts =
+            if (knownConflictsEnabled) {
+                graphRepository.visibleConflicts(scope).map {
+                    AgentKnownConflict(it.relationId, it.documentId, it.otherDocumentId, it.item)
+                }
+            } else {
+                null
+            }
         // AI 호출은 DB 트랜잭션 밖에서 수행한다(최대 70초, 위 두 저장은 이미 각각 커밋됨).
-        val response = client.chat(AgentChatRequest(message, conversation.id.toString()))
+        val response = client.chat(AgentChatRequest(message, conversation.id.toString(), filters, accessScope, knownConflicts))
+        if (response.sources.any { !it.id.isUuid() } || response.evidence.any { !it.chunkId.isUuid() }) {
+            throw ApiException(ErrorCode.AI_UNAVAILABLE)
+        }
         val visible = visibleSources(principal, response.sources)
+        val evidence = visibleEvidence(principal, response.evidence)
+        val keywords = visibleKeywords(principal, response.keywords)
+        val declaredAnswerType =
+            response.answerType
+                ?: if (response.sources.isEmpty()) AnswerType.NO_EVIDENCE else AnswerType.ANSWER
+        val suppressUnverifiedAnswer =
+            (declaredAnswerType == AnswerType.ANSWER && visible.isEmpty()) ||
+                (response.sources.isNotEmpty() && visible.isEmpty()) ||
+                (response.evidence.isNotEmpty() && evidence.isEmpty()) ||
+                (response.keywords.isNotEmpty() && keywords.isEmpty())
+        val answerType =
+            if (suppressUnverifiedAnswer) {
+                AnswerType.NO_EVIDENCE
+            } else {
+                declaredAnswerType
+            }
+        val answer =
+            if (suppressUnverifiedAnswer) {
+                "관련 문서를 찾지 못했습니다."
+            } else {
+                response.answer
+            }
+        val safeSources = if (suppressUnverifiedAnswer) emptyList() else visible
+        val safeEvidence = if (suppressUnverifiedAnswer) emptyList() else evidence
+        val safeKeywords = if (suppressUnverifiedAnswer) emptyList() else keywords
         conversations.addMessage(
             principal,
             conversation.id,
             MessageRole.ASSISTANT,
-            response.answer,
-            visible.map { UUID.fromString(it.id) }.toSet(),
+            answer,
+            (safeSources.map { UUID.fromString(it.id) } + safeEvidence.map { UUID.fromString(it.chunkId) }).toSet(),
         )
         return QuestionResponse(
             conversation.id,
-            response.answer,
+            answer,
+            answerType,
             response.route,
             response.contextProbability,
-            visible,
+            safeSources,
+            safeEvidence,
             response.failedSources,
             response.fallbackReason,
+            safeKeywords,
         )
+    }
+
+    private fun validateFilters(filters: SearchFilters?) {
+        if (filters == null) return
+
+        fun valid(
+            values: List<String>?,
+            allowed: Set<String>,
+        ) = values == null || (values.isNotEmpty() && values.all { it in allowed })
+        if (!valid(filters.extensions, allowedExtensions) ||
+            !valid(filters.documentTypes, DocumentType.entries.map { it.name }.toSet()) ||
+            !valid(filters.sourceKinds, SourceKind.entries.map { it.name }.toSet()) ||
+            (filters.authoredFrom != null && filters.authoredTo != null && filters.authoredFrom > filters.authoredTo)
+        ) {
+            throw ApiException(ErrorCode.INVALID_INPUT)
+        }
     }
 
     // AI 응답의 documentId/text는 네트워크 경계를 넘어온 값이라 신뢰하지 않는다. source.id(청크 ID)만
@@ -153,4 +246,109 @@ class QuestionService(
             )
         return rows.associateBy { it.chunkId }
     }
+
+    private fun visibleEvidence(
+        principal: UserPrincipal,
+        evidence: List<AgentEvidence>,
+    ): List<QuestionEvidenceView> {
+        val scope = policy.scope(principal)
+        return evidence
+            .asSequence()
+            .chunked(32)
+            .flatMap { candidates ->
+                val parsedIds = candidates.map { runCatching { UUID.fromString(it.chunkId) }.getOrNull() }
+                val verified = fetchVerifiedChunks(scope, parsedIds.filterNotNull().distinct())
+                candidates.asSequence().mapNotNull { item ->
+                    val chunkId = runCatching { UUID.fromString(item.chunkId) }.getOrNull() ?: return@mapNotNull null
+                    val chunk = verified[chunkId] ?: return@mapNotNull null
+                    val claimedDocumentId = item.documentId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                    val claimedVersionId = item.versionId?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+                    if ((item.documentId != null && claimedDocumentId != chunk.documentId) ||
+                        (item.versionId != null && claimedVersionId != chunk.versionId)
+                    ) {
+                        return@mapNotNull null
+                    }
+                    if (item.quote.isEmpty() || !chunk.content.contains(item.quote)) return@mapNotNull null
+
+                    val offsets = verifiedQuoteOffsets(chunk, item)
+                    QuestionEvidenceView(
+                        chunkId = chunk.chunkId.toString(),
+                        source = chunk.documentTitle,
+                        documentId = chunk.documentId,
+                        versionId = chunk.versionId,
+                        quote = item.quote,
+                        charStart = offsets?.first,
+                        charEnd = offsets?.second,
+                    )
+                }
+            }.take(3)
+            .toList()
+    }
+
+    private fun visibleKeywords(
+        principal: UserPrincipal,
+        keywords: List<AgentKeyword>,
+    ): List<QuestionKeywordView> {
+        val scope = policy.scope(principal)
+        return keywords
+            .asSequence()
+            .chunked(32)
+            .flatMap { candidates ->
+                val parsedIds = candidates.map { runCatching { UUID.fromString(it.chunkId) }.getOrNull() }
+                val verified = fetchVerifiedChunks(scope, parsedIds.filterNotNull().distinct())
+                candidates.asSequence().mapNotNull { item ->
+                    val chunkId = runCatching { UUID.fromString(item.chunkId) }.getOrNull() ?: return@mapNotNull null
+                    val chunk = verified[chunkId] ?: return@mapNotNull null
+                    if (item.text.isBlank() || !chunk.content.contains(item.text)) return@mapNotNull null
+                    QuestionKeywordView(item.text, chunk.chunkId.toString())
+                }
+            }.distinctBy { it.text }
+            .take(3)
+            .toList()
+    }
+
+    private fun verifiedQuoteOffsets(
+        chunk: VerifiedChunk,
+        evidence: AgentEvidence,
+    ): Pair<Int, Int>? {
+        val documentChunkStart = chunk.charStart ?: return null
+        val quoteLength = evidence.quote.codePointCount(0, evidence.quote.length)
+        val chunkLength = chunk.content.codePointCount(0, chunk.content.length)
+        val requestedStart = evidence.charStart
+        val requestedEnd = evidence.charEnd
+        if (requestedStart != null && requestedEnd != null) {
+            val localStart = requestedStart.toLong() - documentChunkStart
+            val localEnd = requestedEnd.toLong() - documentChunkStart
+            if (documentChunkStart >= 0 &&
+                localStart >= 0 &&
+                localEnd >= localStart &&
+                localEnd <= chunkLength &&
+                localEnd - localStart == quoteLength.toLong() &&
+                chunk.substringByCodePoints(localStart, localEnd) == evidence.quote
+            ) {
+                return requestedStart to requestedEnd
+            }
+        }
+
+        val firstUtf16Offset = chunk.content.indexOf(evidence.quote)
+        if (firstUtf16Offset < 0 || chunk.content.indexOf(evidence.quote, firstUtf16Offset + 1) >= 0) return null
+        val localStart = chunk.content.codePointCount(0, firstUtf16Offset)
+        val start = documentChunkStart.toLong() + localStart
+        val end = start + quoteLength
+        if (start !in 0..Int.MAX_VALUE.toLong() || end > Int.MAX_VALUE) return null
+        return start.toInt() to end.toInt()
+    }
+
+    private fun VerifiedChunk.substringByCodePoints(
+        start: Long,
+        end: Long,
+    ): String? {
+        val count = content.codePointCount(0, content.length)
+        if (start < 0 || end < start || end > count) return null
+        val startOffset = content.offsetByCodePoints(0, start.toInt())
+        val endOffset = content.offsetByCodePoints(0, end.toInt())
+        return content.substring(startOffset, endOffset)
+    }
 }
+
+private fun String.isUuid(): Boolean = runCatching { UUID.fromString(this) }.isSuccess

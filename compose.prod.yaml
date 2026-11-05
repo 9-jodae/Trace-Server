@@ -13,22 +13,43 @@ services:
       DB_USER: docs199
       STORAGE_TYPE: s3
       AWS_REGION: ${AWS_REGION:-ap-southeast-1}
-      AI_MODE: mock
+      AI_MODE: ${AI_MODE:-mock}
+      AI_INGEST_MODE: ${AI_INGEST_MODE:-${AI_MODE:-mock}}
+      AI_KNOWN_CONFLICTS_ENABLED: ${AI_KNOWN_CONFLICTS_ENABLED:-true}
+      AI_BASE_URL: ${AI_BASE_URL:-http://ai:8000}
+      DOCUMENT_REVISION_ENABLED: ${DOCUMENT_REVISION_ENABLED:-false}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:18080:8080"
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
-  health-gateway:
+  api-gateway:
     image: nginx:1.30.6-alpine
     volumes:
-      - ./infra/nginx/health.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infra/nginx/gateway.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "0.0.0.0:8080:8080"
+    expose:
+      - "8081"
     depends_on:
       app:
         condition: service_healthy
+    restart: unless-stopped
+  caddy:
+    image: caddy:2.11.7-alpine
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api-gateway:
+        condition: service_started
     restart: unless-stopped
   postgres:
     image: pgvector/pgvector:0.8.7-pg18
@@ -71,7 +92,7 @@ services:
   # AI server: uncomment once its image is published and the ingest/query contract (Issue #14) is confirmed.
   # ai:
   #   build:
-  #     context: ../docs199-AI
+  #     context: ../docs199-AI-v2
   #   environment:
   #     DB_URL: jdbc:postgresql://postgres:5432/docs199
   #     AI_DB_USER: ai_app
@@ -91,5 +112,7 @@ services:
   #       condition: service_healthy
   #   restart: unless-stopped
 volumes:
+  caddy-config:
+  caddy-data:
   postgres-data:
   neo4j-data:

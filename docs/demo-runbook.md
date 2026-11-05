@@ -4,11 +4,71 @@
 
 ## 시연 전 점검
 
+### 시연 전 30분 체크리스트
+
+| 시점 | 확인 항목 | 통과 기준 |
+| --- | --- | --- |
+| 30분 전 | 배포 커밋과 `GET /api/health` 확인 | 예상 커밋이며 `status=UP` |
+| 25분 전 | `scripts/load-demo.py` 실행 후 요약 확인 | 논리 문서 18개, 파일 버전 19개, 처리 상태 `DONE` |
+| 20분 전 | 같은 적재 명령을 한 번 더 실행 | 2회차에 새 생성·개정이 없고 문서·버전 수가 동일 |
+| 15분 전 | 시연 계정 4개 로그인 및 권한 확인 | `hr.staff`, `hr.manager`, `ops.director`, `sales.manager`의 `/api/users/me`와 문서 목록 차이 확인 |
+| 10분 전 | 스모크 검증 실행 | 개정·충돌·권한 3개 시나리오 모두 PASS |
+| 5분 전 | 장애 시 mock 전환 명령 준비 | 아래 전환 명령을 실행할 배포 담당자와 복귀 기준 확인 |
+
+실행 명령은 서버의 저장소 루트에서 실행합니다. 비밀번호를 명령 인자에 넣지 말고 환경 변수로 입력합니다.
+
+```bash
+read -rs DEMO_PASSWORD; export DEMO_PASSWORD
+python3 scripts/load-demo.py http://127.0.0.1:18080
+python3 scripts/smoke-demo.py http://127.0.0.1:18080
+unset DEMO_PASSWORD
+```
+
+두 번째 적재 실행도 같은 명령을 다시 실행합니다. 적재기는 문서와 버전별 처리 결과를 출력하며 마지막에 문서 수·버전 수·처리 상태를 요약합니다. 스모크는 기본 모드에서 mock 응답 구조와 계정별 문서 접근 차이를 확인합니다. 실제 답변의 수치와 인용까지 확인할 때만 `--strict`를 붙입니다.
+
+외부 AI 연결 장애로 mock 전환이 필요하면 서버에서 배포 담당자가 다음 명령을 실행합니다(저장소 루트 기준). 이 명령은 `.env`를 백업하고 `AI_MODE=mock`으로 전환한 뒤 develop을 배포합니다.
+
+```bash
+scripts/switch-ai-mode.sh mock
+```
+
+### 사전 점검 상세
+
 1. 배포 담당자에게 시연 환경의 주소와 배포 커밋을 확인합니다. `GET /api/health`의 `status`가 `UP`이고 예상 커밋·프로필인지 확인합니다. 서버 내부에서는 `/actuator/health`도 확인합니다. 이 단계는 실제 시연 환경에서 아직 수행하지 않았습니다.
 2. 배포 담당자에게 데모 계정의 비밀번호를 **개별 전달**받습니다. 운영 시드의 비밀번호는 서버 `~/docs199-Server/.env`의 `DEMO_PASSWORD`이며, 문서·화면·발표 자료에 값을 적지 않습니다. 계정별로 `POST /api/auth/login` 후 `GET /api/users/me`의 부서·직급·역할·등급을 확인합니다. `doc.admin@local.docs199`가 업로드를 맡습니다.
-3. `demo/tools/upload_demo.py`를 계획 모드로 먼저 확인한 뒤, 운영자가 [업로드 절차](../demo/README.md#업로드)에 따라 실제 업로드합니다. `--check-exclusions` 결과에서 `.obsidian/app.json`이 `EXCLUDED`인지 확인합니다. `GET /api/admin/sources`와 문서 목록에서 `LOCAL`·`OBSIDIAN` 소스, 논리 문서 18개를 확인합니다. 파일은 19개이며 `출장비 규정` 두 파일이 한 문서의 v1·v2입니다.
+3. `scripts/load-demo.py`를 실행해 매니페스트 기준 자료를 멱등 적재합니다. `GET /api/admin/sources`와 문서 목록에서 `LOCAL`·`OBSIDIAN` 소스, 논리 문서 18개를 확인합니다. 파일은 19개이며 `출장비 규정` 두 파일이 한 문서의 v1·v2입니다.
 4. `출장비 규정` 상세의 현재 버전이 v2이고 이력에 v1·v2가 모두 있는지 확인합니다. 권한별 직원 목록에서 `취업규칙`·`연차 운영 지침`, `고객 할인 안내`·`전략 고객 할인 승인 기준`의 표시 차이를 확인합니다. 목록 제목은 현재 파일명에서 파생될 수 있으므로 매니페스트의 `sourceRelativePath`로 문서를 대조합니다(Issue #38).
 5. AI 기능을 시연하려면 실제 AI 서버 연결과 질문·근거·그래프 API, 인덱싱 완료 여부를 별도로 확인합니다. **mock의 `DONE`만으로 검색 가능한 청크가 만들어졌다고 판단하지 않습니다.** 아래 질문 답변·원문 하이라이트·관계 그래프는 모두 **구현 후 확인 필요**입니다.
+
+## 사전 적재 절차
+
+AI 서버는 현재 Spring의 `/ingest` 요청과 결과 콜백을 사용하지 않고 JSON 파일을 읽는 CLI로만 적재합니다. 따라서 시연 전에 아래 단계를 수행해야 합니다. 신규 업로드와 개정 문서는 **수동 적재가 끝나기 전에는 검색되지 않습니다.**
+
+1. 팀 서버의 Spring 저장소에서 삭제되지 않은 문서의 현재 버전 원문을 JSON으로 내보냅니다. 서버의 `.env`와 인스턴스 역할 자격 증명을 사용하므로 파일 내용이나 자격 증명을 화면에 출력하지 않습니다.
+
+   ```bash
+   cd ~/docs199-Server
+   python3 scripts/export-documents-json.py ~/exports/demo-documents.json
+   chmod 600 ~/exports/demo-documents.json
+   ```
+
+2. AI 저장소 운영 가이드에 따라 적재 CLI를 실행합니다. 확인된 CLI는 JSON 경로 하나를 받으며, AI 서버 가상환경과 DB·임베딩 환경이 준비된 상태여야 합니다.
+
+   ```bash
+   cd ~/docs199-AI-v2
+   .venv/bin/python -m app.retrieval.indexing ~/exports/demo-documents.json
+   ```
+
+3. 출력된 청크 수를 확인하고 Spring 서버 저장소에서 현재 버전별 청크 수와 임베딩 NULL 수를 점검합니다.
+
+   ```bash
+   cd ~/docs199-Server
+   scripts/check-chunks.sh
+   ```
+
+   모든 검색 대상 현재 버전에 청크가 있고 임베딩 NULL 수가 0인지 확인합니다. AI CLI는 현재 버전만 적재하며, 같은 버전을 다시 처리할 때 기존 버전 청크를 트랜잭션에서 교체하므로 재적재는 멱등하게 반복할 수 있습니다.
+
+문서 파일을 다시 올리거나 개정해 현재 버전이 바뀌면 JSON을 다시 생성하고 적재해야 합니다. `DONE` 상태만으로 적재 완료를 판단하지 말고 위 점검 결과를 기준으로 삼습니다.
 
 ## 현재 시연 가능한 범위
 
@@ -53,3 +113,19 @@
 - 발표 화면에 토큰, 비밀번호, 내부 공유 비밀, Presigned URL 전체 문자열을 표시하지 않습니다.
 - AI 답변을 보여줄 수 있게 된 뒤에는 각 문장의 근거 문서·버전·원문 위치가 실제로 일치하는지 확인합니다. 충돌 규정의 어느 한쪽을 단정하지 않고, 구버전 수치를 현재 기준으로 답하지 않도록 확인합니다.
 - 문서 관계 그래프를 추가한 뒤에는 `출장비 규정` ↔ `경비 결재 절차`, `취업규칙` ↔ `연차 운영 지침`, `고객 할인 안내` ↔ `전략 고객 할인 승인 기준`의 연결과 계정별 노드 노출을 확인합니다. **구현 후 확인 필요**입니다.
+
+## 시연 확인 스크립트 (Issue #23)
+
+`scripts/smoke-demo.py`는 헬스체크 → 장면별 계정 로그인·문서 목록 개수 → 장면별 질문 1건 → 근거 조회까지 한 번에 점검하고 표로 요약합니다. 토큰·비밀번호·문서 본문·답변 본문은 출력하지 않습니다.
+
+```bash
+python3 -m venv ~/.venvs/docs199-smoke  # 최초 1회
+~/.venvs/docs199-smoke/bin/pip install requests  # 최초 1회
+read -rs DEMO_PASSWORD; export DEMO_PASSWORD  # 데모 비밀번호를 화면에 표시하지 않고 입력
+~/.venvs/docs199-smoke/bin/python scripts/smoke-demo.py http://localhost:18080
+unset DEMO_PASSWORD
+```
+
+- 서버 주소는 위치 인자로 받습니다. 팀 서버의 8080 포트는 `/api/health`만 제공하므로 전체 점검은 서버 내부의 `http://localhost:18080`으로 실행합니다.
+- `AI_MODE=mock`인 동안에는 질문 응답이 고정 문구(`모의 응답입니다: ...`)로 오므로, 표에 "mock 응답"으로 표시하고 상단에 안내 문구를 남깁니다. 실제 AI 연동 후에는 "실답변"으로 표시됩니다.
+- 각 단계는 실패해도 다음 단계로 계속 진행하며, 마지막에 실패 목록을 출력하고 하나라도 실패하면 종료 코드 1을 반환합니다.

@@ -9,6 +9,7 @@ import com.jodae.docs199.domain.document.IngestionAfterCommit
 import com.jodae.docs199.domain.document.JobStatus
 import com.jodae.docs199.domain.document.JobUpdater
 import com.jodae.docs199.domain.document.SourceKind
+import com.jodae.docs199.domain.document.SourceRecord
 import com.jodae.docs199.domain.document.StorageCleanupQueue
 import com.jodae.docs199.domain.document.StorageCleanupWorker
 import com.jodae.docs199.domain.document.VersionRecord
@@ -18,6 +19,7 @@ import com.jodae.docs199.domain.user.UserRepository
 import com.jodae.docs199.global.error.ApiException
 import com.jodae.docs199.global.security.UserPrincipal
 import com.jodae.docs199.global.storage.FileStorage
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -31,11 +33,11 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
 import org.springframework.util.LinkedMultiValueMap
-import java.net.URI
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -43,6 +45,8 @@ import java.util.UUID
 
 class DocumentIntegrationTests : IntegrationTestBase() {
     @Autowired lateinit var service: DocumentService
+
+    @Autowired lateinit var jdbc: JdbcTemplate
 
     @Autowired lateinit var repository: DocumentRepository
 
@@ -70,28 +74,223 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     private fun file(text: String) = MockMultipartFile("file", "memo.md", "text/markdown", text.toByteArray())
 
     @Test
+    fun streamsCurrentAndHistoricalVersionsOnlyWhenAccessible() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "download-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val first = service.uploadOne(admin, source.id, "memo.md", file("first-version"), null, null, null)
+        val documentId = first.documentId!!
+        val firstVersionId = repository.versions(documentId).first().id
+        service.uploadOne(admin, source.id, "memo.md", file("current-version"), null, null, null)
+
+        val adminLogin = rest.postForEntity("/api/dev/token", null, String::class.java)
+        val adminToken = Regex("\"accessToken\":\"([^\"]+)\"").find(adminLogin.body!!)!!.groupValues[1]
+        val adminHeaders = HttpHeaders().apply { setBearerAuth(adminToken) }
+        val adminDownload =
+            rest.exchange(
+                "/api/admin/documents/$documentId/download",
+                HttpMethod.GET,
+                HttpEntity<Void>(adminHeaders),
+                ByteArray::class.java,
+            )
+        assertEquals(HttpStatus.OK, adminDownload.statusCode)
+        assertArrayEquals("current-version".toByteArray(), adminDownload.body)
+
+        val login =
+            rest.postForEntity(
+                "/api/auth/login",
+                HttpEntity(
+                    """{"email":"hr.staff@local.docs199","password":"local-demo-1234"}""",
+                    HttpHeaders().apply { contentType = MediaType.APPLICATION_JSON },
+                ),
+                String::class.java,
+            )
+        val token = Regex("\"accessToken\":\"([^\"]+)\"").find(login.body!!)!!.groupValues[1]
+        val headers = HttpHeaders().apply { setBearerAuth(token) }
+
+        val current =
+            rest.exchange(
+                "/api/documents/$documentId/download",
+                HttpMethod.GET,
+                HttpEntity<Void>(headers),
+                ByteArray::class.java,
+            )
+        assertEquals(HttpStatus.OK, current.statusCode)
+        assertArrayEquals("current-version".toByteArray(), current.body)
+        assertTrue(current.headers.getFirst(HttpHeaders.CONTENT_DISPOSITION)!!.startsWith("inline"))
+
+        val historical =
+            rest.exchange(
+                "/api/documents/$documentId/versions/$firstVersionId/download",
+                HttpMethod.GET,
+                HttpEntity<Void>(headers),
+                ByteArray::class.java,
+            )
+        assertEquals(HttpStatus.OK, historical.statusCode)
+        assertArrayEquals("first-version".toByteArray(), historical.body)
+
+        val restrictedUpload =
+            service.uploadOne(
+                admin,
+                source.id,
+                "restricted.md",
+                file("restricted"),
+                Clearance.CONFIDENTIAL,
+                null,
+                null,
+            )
+        val restricted = restrictedUpload.documentId!!
+        val denied =
+            rest.exchange(
+                "/api/documents/$restricted/download",
+                HttpMethod.GET,
+                HttpEntity<Void>(headers),
+                ByteArray::class.java,
+            )
+        assertEquals(HttpStatus.NOT_FOUND, denied.statusCode)
+
+        val anonymous = rest.getForEntity("/api/documents/$documentId/download", ByteArray::class.java)
+        assertEquals(HttpStatus.UNAUTHORIZED, anonymous.statusCode)
+    }
+
+    @Test
     fun uploadVersionJobAndExclusions() {
         val admin = principal("doc.admin@local.docs199")
         val source = service.createSource(admin, SourceKind.LOCAL, "테스트-${UUID.randomUUID()}", null, Clearance.PUBLIC)
-        val first = service.uploadOne(admin, source.id, "notes/memo.md", file("첫 내용"), null, null, null)
+        val first =
+            service.uploadOne(
+                admin,
+                source.id,
+                "notes/memo.md",
+                file("\uCCAB \uB0B4\uC6A9"),
+                null,
+                null,
+                null,
+                displayTitle = "\uCD9C\uC7A5\uBE44 \uADDC\uC815",
+            )
         assertEquals("CREATED", first.outcome)
         val id = first.documentId!!
+        assertEquals("\uCD9C\uC7A5\uBE44 \uADDC\uC815", repository.document(id)?.title)
+        val fallback = service.uploadOne(admin, source.id, "notes/plain.md", file("\uAE30\uBCF8 \uC81C\uBAA9"), null, null, null)
+        assertEquals("plain", repository.document(fallback.documentId!!)?.title)
         assertEquals(1, first.version)
         val url = service.downloadUrl(admin, id, true)
-        assertTrue(url.contains("documents/"))
-        assertEquals("첫 내용", URI(url).toURL().openStream().use { it.readAllBytes().decodeToString() })
+        assertEquals("/api/admin/documents/$id/download", url)
         repeat(30) {
             if (service.detail(admin, id, true).job?.status == JobStatus.DONE) return@repeat
             Thread.sleep(100)
         }
         assertEquals(JobStatus.DONE, service.detail(admin, id, true).job?.status)
-        assertEquals("UNCHANGED", service.uploadOne(admin, source.id, "notes/memo.md", file("첫 내용"), null, null, null).outcome)
+        assertEquals(
+            "UNCHANGED",
+            service.uploadOne(admin, source.id, "notes/memo.md", file("\uCCAB \uB0B4\uC6A9"), null, null, null).outcome,
+        )
         assertEquals(2, service.uploadOne(admin, source.id, "notes/memo.md", file("둘째 내용"), null, null, null).version)
         assertEquals(2, repository.versions(id).size)
         assertEquals("EXCLUDED", service.uploadOne(admin, source.id, ".obsidian/cache.md", file("x"), null, null, null).outcome)
         assertEquals("EXCLUDED", service.uploadOne(admin, source.id, "notes/a.exe", file("x"), null, null, null).outcome)
         service.delete(id)
         assertThrows(ApiException::class.java) { service.detail(admin, id, true) }
+    }
+
+    @Test
+    fun currentDocumentReportsSearchableOnlyWhenCurrentVersionHasChunks() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "searchable-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId = UUID.randomUUID()
+        val versionId = UUID.randomUUID()
+        repository.insertDocument(
+            DocumentRecord(
+                documentId,
+                source.id,
+                "searchable-${UUID.randomUUID()}",
+                "Searchable test",
+                "searchable.md",
+                "md",
+                null,
+                null,
+                null,
+                Clearance.PUBLIC,
+                null,
+                0,
+                null,
+            ),
+        )
+        repository.addVersion(
+            VersionRecord(versionId, documentId, 1, "test/$versionId", 1, "a".repeat(64), admin.userId, Instant.now()),
+        )
+        repository.updateVersion(documentId, 1)
+        assertFalse(service.detail(admin, documentId, true).document.searchable)
+
+        jdbc.update(
+            "INSERT INTO chunks(id, document_version_id, chunk_index, content) VALUES (?, ?, 0, ?)",
+            UUID.randomUUID(),
+            versionId,
+            "searchable test content",
+        )
+        assertTrue(service.detail(admin, documentId, true).document.searchable)
+    }
+
+    @Test
+    fun sourceIndependentIngestSeparatesExternalIdFromDisplayMetadata() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.OBSIDIAN, "external-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val first =
+            service.upsertDocument(
+                principal = admin,
+                sourceId = source.id,
+                externalId = "page-42",
+                title = "Handover guide",
+                displayPath = "Operations/Handover.md",
+                extension = "md",
+                bytes = "initial text".toByteArray(),
+                contentType = "text/markdown",
+            )
+        assertEquals("CREATED", first.outcome)
+        val documentId = first.documentId!!
+        assertEquals("page-42", repository.document(documentId)?.externalId)
+        assertEquals("Handover guide", repository.document(documentId)?.title)
+        assertEquals("Operations/Handover.md", repository.document(documentId)?.relativePath)
+
+        val revision =
+            service.upsertDocument(
+                principal = admin,
+                sourceId = source.id,
+                externalId = "page-42",
+                title = "Revised handover guide",
+                displayPath = "Operations/Handover guide.md",
+                extension = "md",
+                bytes = "revised text".toByteArray(),
+                contentType = "text/markdown",
+            )
+        assertEquals(documentId, revision.documentId)
+        assertEquals(2, revision.version)
+        assertEquals("Revised handover guide", repository.document(documentId)?.title)
+        assertEquals("Operations/Handover guide.md", repository.document(documentId)?.relativePath)
+
+        val differentExternalId =
+            service.upsertDocument(
+                principal = admin,
+                sourceId = source.id,
+                externalId = "page-43",
+                title = "Different document with same filename",
+                displayPath = "Operations/Handover guide.md",
+                extension = "md",
+                bytes = "initial text".toByteArray(),
+                contentType = "text/markdown",
+            )
+        assertEquals("CREATED", differentExternalId.outcome)
+        assertTrue(differentExternalId.documentId != documentId)
+    }
+
+    @Test
+    fun multipartAdapterRejectsNotionSources() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = SourceRecord(UUID.randomUUID(), SourceKind.NOTION, "notion-${UUID.randomUUID()}", null, Clearance.PUBLIC, admin.userId)
+        repository.createSource(source)
+
+        assertThrows(ApiException::class.java) {
+            service.uploadOne(admin, source.id, "page.md", file("content"), null, null, null)
+        }
     }
 
     @Test
@@ -194,6 +393,67 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     }
 
     @Test
+    fun unchangedUploadUpdatesOnlyProvidedMetadataWithoutCreatingVersionOrJob() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "메타데이터-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val originalDate = LocalDate.of(2026, 1, 1)
+        val originalModified = Instant.now().minusSeconds(3600).truncatedTo(ChronoUnit.MICROS)
+        val content = "같은 파일 내용"
+        val documentId =
+            service
+                .uploadOne(
+                    admin,
+                    source.id,
+                    "metadata.md",
+                    file(content),
+                    null,
+                    null,
+                    null,
+                    author = "작성자 A",
+                    authoredAt = originalDate,
+                    sourceModifiedAt = originalModified,
+                    displayTitle = "원래 제목",
+                ).documentId!!
+
+        repeat(30) {
+            if (service.detail(admin, documentId, true).job?.status != JobStatus.DONE) Thread.sleep(100)
+        }
+        val initialDetail = service.detail(admin, documentId, true)
+        val initialJobId = initialDetail.job!!.id
+
+        val result =
+            service.uploadOne(
+                admin,
+                source.id,
+                "metadata.md",
+                file(content),
+                null,
+                null,
+                null,
+                author = "작성자 B",
+                authoredAt = LocalDate.of(2026, 2, 2),
+                displayTitle = "수정된 제목",
+            )
+
+        assertEquals("UNCHANGED", result.outcome)
+        assertEquals(1, repository.document(documentId)?.currentVersion)
+        assertEquals(1, repository.versions(documentId).size)
+        assertEquals("작성자 B", repository.document(documentId)?.author)
+        assertEquals(LocalDate.of(2026, 2, 2), repository.document(documentId)?.authoredAt)
+        assertEquals(originalModified, repository.document(documentId)?.sourceModifiedAt)
+        assertEquals("수정된 제목", repository.document(documentId)?.title)
+        assertEquals(initialJobId, service.detail(admin, documentId, true).job?.id)
+
+        val noMetadataUpdate = service.uploadOne(admin, source.id, "metadata.md", file(content), null, null, null)
+        assertEquals("UNCHANGED", noMetadataUpdate.outcome)
+        assertEquals("작성자 B", repository.document(documentId)?.author)
+        assertEquals(LocalDate.of(2026, 2, 2), repository.document(documentId)?.authoredAt)
+        assertEquals(originalModified, repository.document(documentId)?.sourceModifiedAt)
+        assertEquals("수정된 제목", repository.document(documentId)?.title)
+        assertEquals(initialJobId, service.detail(admin, documentId, true).job?.id)
+    }
+
+    @Test
     fun aiCallbackFillsMissingAuthorButNeverOverwritesUserInput() {
         val admin = principal("doc.admin@local.docs199")
         val source = service.createSource(admin, SourceKind.LOCAL, "콜백메타-${UUID.randomUUID()}", null, Clearance.PUBLIC)
@@ -236,6 +496,7 @@ class DocumentIntegrationTests : IntegrationTestBase() {
         val token = Regex("\"accessToken\":\"([^\"]+)\"").find(tokenBody)!!.groupValues[1]
         val form = LinkedMultiValueMap<String, Any>()
         form.add("paths", "folder/from-api.md")
+        form.add("titles", "API 표시 제목")
         form.add(
             "files",
             object : ByteArrayResource("API 파일".toByteArray()) {
@@ -250,6 +511,39 @@ class DocumentIntegrationTests : IntegrationTestBase() {
         val upload = rest.postForEntity("/api/admin/sources/${source.id}/documents", HttpEntity(form, headers), String::class.java)
         assertEquals(HttpStatus.OK, upload.statusCode)
         assertTrue(upload.body!!.contains("CREATED"))
+        val documentId = Regex("\"documentId\":\"([^\"]+)\"").find(upload.body!!)!!.groupValues[1]
+        listOf(listOf("one", "two"), listOf(" ")).forEach { invalidTitles ->
+            val invalidForm = LinkedMultiValueMap<String, Any>()
+            invalidForm.add("paths", "folder/invalid.md")
+            invalidTitles.forEach { invalidForm.add("titles", it) }
+            invalidForm.add(
+                "files",
+                object : ByteArrayResource("content".toByteArray()) {
+                    override fun getFilename() = "invalid.md"
+                },
+            )
+            val invalidUpload =
+                rest.postForEntity("/api/admin/sources/${source.id}/documents", HttpEntity(invalidForm, headers), String::class.java)
+            assertEquals(HttpStatus.BAD_REQUEST, invalidUpload.statusCode)
+        }
+        val readHeaders = HttpHeaders().apply { setBearerAuth(token) }
+        val detail =
+            rest.exchange(
+                "/api/admin/documents/$documentId",
+                HttpMethod.GET,
+                HttpEntity<Void>(readHeaders),
+                String::class.java,
+            )
+        assertEquals(HttpStatus.OK, detail.statusCode)
+        assertTrue(detail.body!!.contains("API 표시 제목"))
+        val adminList =
+            rest.exchange(
+                "/api/admin/documents?sourceId=${source.id}",
+                HttpMethod.GET,
+                HttpEntity<Void>(readHeaders),
+                String::class.java,
+            )
+        assertTrue(adminList.body!!.contains("API 표시 제목"))
         val hrToken =
             rest
                 .postForEntity(
@@ -276,6 +570,36 @@ class DocumentIntegrationTests : IntegrationTestBase() {
             )
         assertEquals(HttpStatus.OK, visible.statusCode)
         assertTrue(visible.body!!.contains("from-api.md"))
+    }
+
+    @Test
+    fun multipartRequestCanContainMultipleFilesAboveTheFormerAggregateLimit() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "batch-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val tokenBody = rest.postForEntity("/api/dev/token", null, String::class.java).body!!
+        val token = Regex("\"accessToken\":\"([^\"]+)\"").find(tokenBody)!!.groupValues[1]
+        val form = LinkedMultiValueMap<String, Any>()
+        form.add("paths", "first.md")
+        form.add("paths", "second.md")
+        val content = ByteArray(11 * 1024 * 1024) { 'x'.code.toByte() }
+        repeat(2) { index ->
+            form.add(
+                "files",
+                object : ByteArrayResource(content) {
+                    override fun getFilename() = "file-$index.md"
+                },
+            )
+        }
+        val headers =
+            HttpHeaders().apply {
+                contentType = MediaType.MULTIPART_FORM_DATA
+                setBearerAuth(token)
+            }
+
+        val upload = rest.postForEntity("/api/admin/sources/${source.id}/documents", HttpEntity(form, headers), String::class.java)
+
+        assertEquals(HttpStatus.OK, upload.statusCode)
+        assertEquals(2, Regex("\"outcome\":\"CREATED\"").findAll(upload.body!!).count())
     }
 
     @Test

@@ -25,7 +25,7 @@ class AiDbRoleTests : IntegrationTestBase() {
                     connection.createStatement().use { it.executeQuery("SELECT 1 FROM $table LIMIT 1") }
                 }
 
-                listOf("users", "conversations", "conversation_messages", "flyway_schema_history").forEach { table ->
+                listOf("users", "conversations", "conversation_messages", "document_relations", "flyway_schema_history").forEach { table ->
                     assertThrows(SQLException::class.java) {
                         connection.createStatement().use { it.executeQuery("SELECT 1 FROM $table LIMIT 1") }
                     }
