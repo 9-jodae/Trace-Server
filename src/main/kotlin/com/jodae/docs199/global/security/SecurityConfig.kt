@@ -124,6 +124,7 @@ class SecurityConfig(
                         "/api/dev/token",
                         "/api/auth/login",
                         "/api/internal/ingestion-jobs/*/result",
+                        "/api/internal/embeddings",
                         "/swagger-ui/**",
                         "/swagger-ui.html",
                         "/v3/api-docs/**",

@@ -123,3 +123,16 @@ DB 접속은 `DATABASE_URL` 또는 환경 변수·`.env`의 `DB_PASSWORD`, `DB_U
 - 답변 생성 LLM의 Bedrock 모델 확정(Claude Haiku 4.5/Sonnet 등 팀 서버에서 키 없이 사용 가능)
 - PDF 페이지·`bbox` 제공 계획(파서 확정 이후)
 - `/ingest` 요청·콜백 초안(위 "처리 요청 초안") 수용 여부
+
+## 임시 임베딩 중계 API
+
+노트북에서 AI 서버를 개발할 때 Spring 서버의 EC2 인스턴스 역할로 Titan 임베딩을 계산한다. AI 서버가 팀 서버로 이전되면 동일한 Bedrock 모델을 직접 호출하고 `EMBEDDING_PROXY_ENABLED=false`로 중계를 끈다. 기본값은 비활성화이며 비활성화 상태에서는 404를 반환한다.
+
+- `POST /api/internal/embeddings`, `X-Internal-Secret` 헤더 필수. 값은 팀장에게 개별로 받는다. JWT만으로 호출할 수 없다.
+- 요청: `{"texts":["첫 번째 텍스트","두 번째 텍스트"]}`. 1~32개, 각 8,000 유니코드 코드 포인트 이하, 빈 문자열이나 공백만 있는 문자열은 허용하지 않는다.
+- 응답: `{"model":"amazon.titan-embed-text-v2:0","dimensions":1024,"embeddings":[[0.1, ...],[0.2, ...]]}`. 벡터는 각각 1024차원이며 요청 순서를 유지한다. 예시의 벡터 값은 축약했다.
+- 전체 제한 시간은 30초, 서버 전체에서 Bedrock 동시 호출은 최대 4개다. 실패하면 본문을 노출하지 않고 공통 오류 `AI_UNAVAILABLE`과 HTTP 503을 반환한다.
+- 기본 리전은 `ap-northeast-1`이며 `BEDROCK_EMBEDDING_REGION`, `BEDROCK_EMBEDDING_MODEL_ID`로 조정할 수 있다. 자격 증명은 AWS 기본 체인에서만 찾는다. `local`, `test`는 결정적인 가짜 벡터를 사용한다.
+- 질문과 문서 임베딩은 같은 모델, 1024차원, `normalize=true`를 사용해야 검색 결과가 일치한다.
+
+가정: 외부 게이트웨이는 헬스체크만 공개하므로 노트북에서는 `ssh -L 18880:localhost:18080 t09`로 터널을 연 다음 `http://localhost:18880/api/internal/embeddings`를 호출한다. 접속 권한과 비밀 헤더는 팀장에게 개별로 받는다. 문서 일괄 적재는 팀 서버에서 직접 실행해 인스턴스 역할로 Bedrock을 호출하는 것을 권장한다.
