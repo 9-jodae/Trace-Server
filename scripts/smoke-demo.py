@@ -39,7 +39,7 @@ def api(session, base, method, path, token=None, json_body=None, timeout=30):
     headers = {"Accept": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    response = session.request(method, base + path, headers=headers, json=json_body, timeout=timeout)
+    response = session.request(method, base + path, headers=headers, json=json_body, timeout=timeout, allow_redirects=False)
     payload = response.json()
     if not payload.get("success"):
         code = (payload.get("error") or {}).get("code", "UNKNOWN")
@@ -52,13 +52,17 @@ def login(session, base, email, password):
     return data["accessToken"]
 
 
+def validate_base_url(base):
+    parsed = urllib.parse.urlparse(base)
+    return parsed.scheme == "https" or (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"})
+
+
 def main():
     parser = argparse.ArgumentParser(description="시연 서버 스모크 테스트")
-    parser.add_argument("base_url", help="서버 주소 (예: http://localhost:8080)")
+    parser.add_argument("base_url", help="서버 주소 (예: http://localhost:18080)")
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
-    parsed = urllib.parse.urlparse(base)
-    if parsed.scheme != "https" and not (parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}):
+    if not validate_base_url(base):
         print("오류: 비밀번호 보호를 위해 HTTPS 또는 localhost URL만 허용합니다.", file=sys.stderr)
         sys.exit(1)
     password = os.environ.get("DEMO_PASSWORD")

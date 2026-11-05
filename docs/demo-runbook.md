@@ -59,10 +59,13 @@
 `scripts/smoke-demo.py`는 헬스체크 → 장면별 계정 로그인·문서 목록 개수 → 장면별 질문 1건 → 근거 조회까지 한 번에 점검하고 표로 요약합니다. 토큰·비밀번호·문서 본문·답변 본문은 출력하지 않습니다.
 
 ```bash
-pip install requests  # 최초 1회
-DEMO_PASSWORD='...' python scripts/smoke-demo.py http://localhost:8080
+python3 -m venv ~/.venvs/docs199-smoke  # 최초 1회
+~/.venvs/docs199-smoke/bin/pip install requests  # 최초 1회
+read -rs DEMO_PASSWORD; export DEMO_PASSWORD  # 데모 비밀번호를 화면에 표시하지 않고 입력
+~/.venvs/docs199-smoke/bin/python scripts/smoke-demo.py http://localhost:18080
+unset DEMO_PASSWORD
 ```
 
-- 서버 주소는 위치 인자로 받습니다(팀 서버는 외부에 `/api/health`만 열려 있으므로, 전체 점검은 서버 내부에서 `http://localhost:8080`으로 실행합니다).
+- 서버 주소는 위치 인자로 받습니다. 팀 서버의 8080 포트는 `/api/health`만 제공하므로 전체 점검은 서버 내부의 `http://localhost:18080`으로 실행합니다.
 - `AI_MODE=mock`인 동안에는 질문 응답이 고정 문구(`모의 응답입니다: ...`)로 오므로, 표에 "mock 응답"으로 표시하고 상단에 안내 문구를 남깁니다. 실제 AI 연동 후에는 "실답변"으로 표시됩니다.
 - 각 단계는 실패해도 다음 단계로 계속 진행하며, 마지막에 실패 목록을 출력하고 하나라도 실패하면 종료 코드 1을 반환합니다.
