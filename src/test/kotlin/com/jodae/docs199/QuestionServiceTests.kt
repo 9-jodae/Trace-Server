@@ -172,6 +172,36 @@ class AgentChatHttpTests {
     }
 
     @Test
+    fun limitsTotalResponseTimeWhenTheServerKeepsTricklingBodyBytes() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/api/v1/agent/chat") { exchange ->
+            exchange.responseHeaders.set("Content-Type", "application/json")
+            exchange.sendResponseHeaders(200, 0)
+            runCatching {
+                exchange.responseBody.use { output ->
+                    """{"threadId":"thread","answer":"ok"}""".toByteArray().asList().chunked(4).forEach { bytes ->
+                        output.write(bytes.toByteArray())
+                        output.flush()
+                        Thread.sleep(300)
+                    }
+                }
+            }
+        }
+        server.start()
+        try {
+            val client = HttpAgentChatClient("http://127.0.0.1:${server.address.port}", 1, "test-secret")
+            val elapsed =
+                measureTimeMillis {
+                    val error = assertThrows(ApiException::class.java) { client.chat(AgentChatRequest("질문", "thread")) }
+                    assertEquals(ErrorCode.AI_UNAVAILABLE, error.code)
+                }
+            assertTrue(elapsed < 2500, "본문 수신이 계속돼 전체 요청 제한시간이 무시됐습니다: ${elapsed}ms")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
     fun logsAiFailureWithoutQuestionContent() {
         val logger = LoggerFactory.getLogger(HttpAgentChatClient::class.java) as Logger
         val appender = ListAppender<ILoggingEvent>().apply { start() }
@@ -480,9 +510,9 @@ class QuestionServiceTests : IntegrationTestBase() {
         val client = FakeAgentChatClient()
         client.nextEvidence =
             listOf(
-                AgentEvidence("잘못된-id-1", "임시 출처", quote = "무효1"),
-                AgentEvidence("잘못된-id-2", "임시 출처", quote = "무효2"),
-                AgentEvidence("잘못된-id-3", "임시 출처", quote = "무효3"),
+                AgentEvidence(UUID.randomUUID().toString(), "임시 출처", quote = "무효1"),
+                AgentEvidence(UUID.randomUUID().toString(), "임시 출처", quote = "무효2"),
+                AgentEvidence(UUID.randomUUID().toString(), "임시 출처", quote = "무효3"),
             ) +
             listOf("A", "B", "C", "D").map { quote ->
                 AgentEvidence(chunkId.toString(), "임시 출처", quote = quote)

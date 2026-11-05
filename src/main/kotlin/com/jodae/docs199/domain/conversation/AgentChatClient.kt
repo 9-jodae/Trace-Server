@@ -8,8 +8,10 @@ import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.MediaType
+import org.springframework.http.client.JdkClientHttpRequestFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
+import java.net.http.HttpClient
 import java.time.Duration
 import java.util.UUID
 
@@ -84,24 +86,24 @@ class HttpAgentChatClient(
 ) : AgentChatClient {
     companion object {
         private const val CONNECT_TIMEOUT_SECONDS = 5L
-        private const val MAX_RESPONSE_TIMEOUT_SECONDS = 80L
+        private const val MAX_TOTAL_TIMEOUT_SECONDS = 80L
     }
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
     // 연결과 응답 대기를 같은 timeoutSeconds로 두면 둘 다 최악으로 지연될 때 최대 2*timeoutSeconds까지
-    // 걸릴 수 있어(기본값 기준 140초), 외부 게이트웨이의 proxy_read_timeout(90초, infra/nginx/gateway.conf)보다
-    // 길어질 수 있었다. AI 서버는 같은 Docker 네트워크 안에 있어 연결 자체는 보통 즉시 끝나므로 연결 제한은
-    // 작게 고정하고, 응답 대기만 설정값을 그대로 쓴다. 최악의 경우에도 connectTimeoutSeconds + timeoutSeconds초를
-    // 넘지 않으므로 기본값 기준 75초로 90초 안에 끝난다.
+    // SimpleClientHttpRequestFactory의 read timeout은 수신 사이의 유휴 시간만 제한해, AI가 바이트를 조금씩
+    // 계속 보내면 전체 요청이 90초를 넘을 수 있었다. JDK HttpClient 요청 제한은 본문 소비까지 포함한 전체
+    // 요청 시간에 적용되므로, 설정값을 최대 80초로 제한해 외부 게이트웨이의 90초 제한보다 먼저 끝낸다.
     private val client =
         RestClient
             .builder()
             .baseUrl(baseUrl)
             .requestFactory(
-                org.springframework.http.client.SimpleClientHttpRequestFactory().apply {
-                    setConnectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS))
-                    setReadTimeout(Duration.ofSeconds(timeoutSeconds.coerceIn(1L, MAX_RESPONSE_TIMEOUT_SECONDS)))
+                JdkClientHttpRequestFactory(
+                    HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS)).build(),
+                ).apply {
+                    setReadTimeout(Duration.ofSeconds(timeoutSeconds.coerceIn(1L, MAX_TOTAL_TIMEOUT_SECONDS)))
                 },
             ).build()
 
