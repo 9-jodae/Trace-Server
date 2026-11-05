@@ -48,13 +48,26 @@ class LoadDemoTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "HTTP 403"):
                 load_demo.request("https://example.com", "GET", "/api/admin/documents")
 
-    def test_manifest_grouping_preserves_order_and_versions(self):
+    def test_manifest_grouping_processes_versions_in_number_order(self):
         manifest = json.loads(load_demo.MANIFEST_PATH.read_text(encoding="utf-8"))
-        groups = load_demo.group_by_logical_id(manifest["documents"])
+        entries = list(manifest["documents"])
+        travel_indices = [index for index, item in enumerate(entries) if item["logicalId"] == "travel-policy"]
+        entries[travel_indices[0]], entries[travel_indices[1]] = entries[travel_indices[1]], entries[travel_indices[0]]
+        load_demo.validate_manifest_order(entries)
+        groups = load_demo.group_by_logical_id(entries)
         travel = groups["travel-policy"]
         self.assertEqual([1, 2], [item["version"] for item in travel])
         self.assertEqual("travel-v1", travel[0]["id"])
         self.assertEqual("travel-v2", travel[1]["id"])
+
+    def test_manifest_rejects_duplicate_and_missing_versions(self):
+        manifest = json.loads(load_demo.MANIFEST_PATH.read_text(encoding="utf-8"))
+        travel = [item for item in manifest["documents"] if item["logicalId"] == "travel-policy"]
+        duplicate = [dict(travel[0]), dict(travel[1], version=1)]
+        missing = [dict(travel[0]), dict(travel[1], version=3)]
+        for entries in (duplicate, missing):
+            with self.subTest(entries=[item["version"] for item in entries]), self.assertRaises(RuntimeError):
+                load_demo.validate_manifest_order(entries)
 
     def test_required_departments_includes_read_and_owner_departments(self):
         self.assertEqual(["개발팀", "인사팀"], load_demo.required_departments([
@@ -73,6 +86,13 @@ class LoadDemoTests(unittest.TestCase):
         with patch.object(load_demo, "request", return_value={"job": {"status": "DONE"}, "versions": [{}, {}]}):
             status, count = load_demo.wait_for_status("http://localhost", "token", "doc-id")
         self.assertEqual(("DONE", 2), (status, count))
+
+    def test_status_summary_fails_for_missing_or_unknown_job_state(self):
+        for status in ("NONE", "WAITING", "FAILED"):
+            detail = {"job": None if status == "NONE" else {"status": status}, "versions": [{}]}
+            with self.subTest(status=status), patch.object(load_demo, "request", return_value=detail):
+                failed = load_demo.print_status_summary("http://localhost", "token", {"doc": "id"})
+                self.assertEqual(["doc"], failed)
 
 
 if __name__ == "__main__":

@@ -204,7 +204,23 @@ def group_by_logical_id(entries):
     groups = {}
     for entry in entries:
         groups.setdefault(entry["logicalId"], []).append(entry)
+    for logical_id, group in groups.items():
+        versions = [entry["version"] for entry in group]
+        if any(type(version) is not int or version < 1 for version in versions):
+            raise RuntimeError(f"논리 문서 버전 번호는 양의 정수여야 합니다: {logical_id}")
+        if len(versions) != len(set(versions)) or sorted(versions) != list(range(1, len(group) + 1)):
+            raise RuntimeError(f"논리 문서 버전은 1부터 연속이어야 합니다: {logical_id}")
+        group.sort(key=lambda entry: entry["version"])
     return groups
+
+
+def validate_manifest_order(entries):
+    """Reject malformed version order before making any remote changes."""
+    groups = group_by_logical_id(entries)
+    for logical_id, group in groups.items():
+        identity = {(entry["sourceKind"], entry["sourceRelativePath"]) for entry in group}
+        if len(identity) != 1:
+            raise RuntimeError(f"논리 문서의 소스 종류와 경로는 버전 간 같아야 합니다: {logical_id}")
 
 
 def wait_for_status(base, token, document_id):
@@ -226,7 +242,7 @@ def print_status_summary(base, token, final_ids):
     for logical_id in final_ids:
         status, version_count = wait_for_status(base, token, final_ids[logical_id])
         rows.append((logical_id, version_count, status))
-        if status in {"FAILED", "PENDING", "PROCESSING"}:
+        if status != "DONE":
             failed.append(logical_id)
     width = max((len(row[0]) for row in rows), default=4)
     print()
@@ -330,6 +346,7 @@ def main():
     manifest_path = Path(args.manifest) if args.manifest else MANIFEST_PATH
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     entries = manifest["documents"]
+    validate_manifest_order(entries)
     validate_manifest_files(entries)
 
     token = json_request(base, "POST", "/api/auth/login", None, {"email": args.email, "password": password})["accessToken"]
