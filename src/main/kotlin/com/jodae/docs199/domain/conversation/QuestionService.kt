@@ -7,6 +7,7 @@ import com.jodae.docs199.global.error.ErrorCode
 import com.jodae.docs199.global.security.AccessPolicy
 import com.jodae.docs199.global.security.AccessScope
 import com.jodae.docs199.global.security.UserPrincipal
+import io.swagger.v3.oas.annotations.media.Schema
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.PreparedStatementSetter
@@ -34,6 +35,7 @@ data class EvidenceSourceView(
 data class QuestionResponse(
     val conversationId: UUID,
     val answer: String,
+    @field:Schema(requiredMode = Schema.RequiredMode.REQUIRED)
     val answerType: AnswerType,
     val route: String?,
     val contextProbability: Double?,

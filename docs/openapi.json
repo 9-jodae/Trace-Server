@@ -1313,7 +1313,8 @@
               "$ref" : "#/components/schemas/QuestionKeywordView"
             }
           }
-        }
+        },
+        "required" : [ "answerType" ]
       },
       "LoginRequest" : {
         "type" : "object",
