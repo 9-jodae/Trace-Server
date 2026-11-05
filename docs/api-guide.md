@@ -125,10 +125,12 @@ sourceModifiedAt=2026-03-01T00:00:00Z
 - **토큰 만료:** 액세스 토큰은 발급 1시간 뒤 만료되고 갱신 토큰은 없습니다. `UNAUTHENTICATED`(401)를 받으면 로그인 API를 다시 호출해 토큰을 교체한 뒤 원래 요청을 재시도하세요.
 - **multipart 업로드:** 각 파일마다 `files`와 `paths`를 같은 순서로 반복해서 보냅니다. JSON으로 인코딩하지 말고 `multipart/form-data`를 사용하세요. 기본 파일 한도는 20 MB, 요청 전체 한도는 100 MB입니다.
 - **CORS:** 현재 기본 허용 출처는 `http://localhost:3000` 하나입니다. 다른 개발 포트나 배포 도메인에서 브라우저 호출이 차단되면 서버 `.env`의 `CORS_ORIGINS`에 프론트의 정확한 origin(스킴·호스트·포트)을 추가해야 합니다. 변경은 서버 설정 담당자에게 요청하세요.
-- **OpenAPI:** 로컬 프로필에서만 `/v3/api-docs`와 Swagger UI가 열립니다. 프론트 타입 생성용 고정 파일은 저장소의 [`openapi.json`](openapi.json)입니다. API 변경 후 아래 명령으로 파일을 갱신하세요. 산출물에 서버 주소가 없으므로 개발·시연 환경의 base URL은 앱 설정으로 전달하세요.
+- **OpenAPI:** 로컬 프로필에서만 `/v3/api-docs`와 Swagger UI가 열립니다. 프론트 타입 생성용 고정 파일은 저장소의 [`openapi.json`](openapi.json)입니다. API 변경 후 아래 명령으로 파일을 갱신하세요. export 설정을 생략한 테스트는 생성 결과와 커밋된 파일이 같은지 검증합니다. 산출물에 서버 주소가 없으므로 개발·시연 환경의 base URL은 앱 설정으로 전달하세요.
 
   ```powershell
+  $env:OPENAPI_EXPORT = "true"
   .\gradlew.bat test --tests com.jodae.docs199.OpenApiExportTests
+  Remove-Item Env:OPENAPI_EXPORT
   ```
 
 ## 문서 목록·상세·다운로드

@@ -156,89 +156,11 @@
             "type" : "string",
             "format" : "uuid"
           }
-        }, {
-          "name" : "paths",
-          "in" : "query",
-          "required" : true,
-          "schema" : {
-            "type" : "array",
-            "items" : {
-              "type" : "string"
-            }
-          }
-        }, {
-          "name" : "titles",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "array",
-            "items" : {
-              "type" : "string"
-            }
-          }
-        }, {
-          "name" : "clearance",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "enum" : [ "PUBLIC", "INTERNAL", "CONFIDENTIAL" ]
-          }
-        }, {
-          "name" : "departmentIds",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "array",
-            "items" : {
-              "type" : "string",
-              "format" : "uuid"
-            },
-            "uniqueItems" : true
-          }
-        }, {
-          "name" : "minimumPosition",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "enum" : [ "STAFF", "SENIOR", "MANAGER", "DIRECTOR" ]
-          }
-        }, {
-          "name" : "ownerDepartmentId",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "format" : "uuid"
-          }
-        }, {
-          "name" : "author",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string"
-          }
-        }, {
-          "name" : "authoredAt",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "format" : "date"
-          }
-        }, {
-          "name" : "sourceModifiedAt",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "format" : "date-time"
-          }
         } ],
         "requestBody" : {
+          "required" : true,
           "content" : {
-            "application/json" : {
+            "multipart/form-data" : {
               "schema" : {
                 "type" : "object",
                 "properties" : {
@@ -248,9 +170,52 @@
                       "type" : "string",
                       "format" : "binary"
                     }
+                  },
+                  "paths" : {
+                    "type" : "array",
+                    "items" : {
+                      "type" : "string"
+                    }
+                  },
+                  "titles" : {
+                    "type" : "array",
+                    "items" : {
+                      "type" : "string"
+                    }
+                  },
+                  "clearance" : {
+                    "type" : "string",
+                    "enum" : [ "PUBLIC", "INTERNAL", "CONFIDENTIAL" ]
+                  },
+                  "departmentIds" : {
+                    "type" : "array",
+                    "items" : {
+                      "type" : "string",
+                      "format" : "uuid"
+                    },
+                    "uniqueItems" : true
+                  },
+                  "minimumPosition" : {
+                    "type" : "string",
+                    "enum" : [ "STAFF", "SENIOR", "MANAGER", "DIRECTOR" ]
+                  },
+                  "ownerDepartmentId" : {
+                    "type" : "string",
+                    "format" : "uuid"
+                  },
+                  "author" : {
+                    "type" : "string"
+                  },
+                  "authoredAt" : {
+                    "type" : "string",
+                    "format" : "date"
+                  },
+                  "sourceModifiedAt" : {
+                    "type" : "string",
+                    "format" : "date-time"
                   }
                 },
-                "required" : [ "files" ]
+                "required" : [ "files", "paths" ]
               }
             }
           }
@@ -281,39 +246,28 @@
             "type" : "string",
             "format" : "uuid"
           }
-        }, {
-          "name" : "author",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string"
-          }
-        }, {
-          "name" : "authoredAt",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "format" : "date"
-          }
-        }, {
-          "name" : "sourceModifiedAt",
-          "in" : "query",
-          "required" : false,
-          "schema" : {
-            "type" : "string",
-            "format" : "date-time"
-          }
         } ],
         "requestBody" : {
+          "required" : true,
           "content" : {
-            "application/json" : {
+            "multipart/form-data" : {
               "schema" : {
                 "type" : "object",
                 "properties" : {
                   "file" : {
                     "type" : "string",
                     "format" : "binary"
+                  },
+                  "author" : {
+                    "type" : "string"
+                  },
+                  "authoredAt" : {
+                    "type" : "string",
+                    "format" : "date"
+                  },
+                  "sourceModifiedAt" : {
+                    "type" : "string",
+                    "format" : "date-time"
                   }
                 },
                 "required" : [ "file" ]
@@ -1928,5 +1882,9 @@
         "bearerFormat" : "JWT"
       }
     }
+  },
+  "info" : {
+    "title" : "docs199 API",
+    "version" : "1.0.0"
   }
 }
