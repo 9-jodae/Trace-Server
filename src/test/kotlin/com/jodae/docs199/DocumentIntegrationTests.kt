@@ -9,6 +9,7 @@ import com.jodae.docs199.domain.document.IngestionAfterCommit
 import com.jodae.docs199.domain.document.JobStatus
 import com.jodae.docs199.domain.document.JobUpdater
 import com.jodae.docs199.domain.document.SourceKind
+import com.jodae.docs199.domain.document.SourceRecord
 import com.jodae.docs199.domain.document.StorageCleanupQueue
 import com.jodae.docs199.domain.document.StorageCleanupWorker
 import com.jodae.docs199.domain.document.VersionRecord
@@ -92,6 +93,69 @@ class DocumentIntegrationTests : IntegrationTestBase() {
         assertEquals("EXCLUDED", service.uploadOne(admin, source.id, "notes/a.exe", file("x"), null, null, null).outcome)
         service.delete(id)
         assertThrows(ApiException::class.java) { service.detail(admin, id, true) }
+    }
+
+    @Test
+    fun sourceIndependentIngestSeparatesExternalIdFromDisplayMetadata() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.OBSIDIAN, "external-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val first =
+            service.upsertDocument(
+                principal = admin,
+                sourceId = source.id,
+                externalId = "page-42",
+                title = "Handover guide",
+                displayPath = "Operations/Handover.md",
+                extension = "md",
+                bytes = "initial text".toByteArray(),
+                contentType = "text/markdown",
+            )
+        assertEquals("CREATED", first.outcome)
+        val documentId = first.documentId!!
+        assertEquals("page-42", repository.document(documentId)?.externalId)
+        assertEquals("Handover guide", repository.document(documentId)?.title)
+        assertEquals("Operations/Handover.md", repository.document(documentId)?.relativePath)
+
+        val revision =
+            service.upsertDocument(
+                principal = admin,
+                sourceId = source.id,
+                externalId = "page-42",
+                title = "Revised handover guide",
+                displayPath = "Operations/Handover guide.md",
+                extension = "md",
+                bytes = "revised text".toByteArray(),
+                contentType = "text/markdown",
+            )
+        assertEquals(documentId, revision.documentId)
+        assertEquals(2, revision.version)
+        assertEquals("Revised handover guide", repository.document(documentId)?.title)
+        assertEquals("Operations/Handover guide.md", repository.document(documentId)?.relativePath)
+
+        val differentExternalId =
+            service.upsertDocument(
+                principal = admin,
+                sourceId = source.id,
+                externalId = "page-43",
+                title = "Different document with same filename",
+                displayPath = "Operations/Handover guide.md",
+                extension = "md",
+                bytes = "initial text".toByteArray(),
+                contentType = "text/markdown",
+            )
+        assertEquals("CREATED", differentExternalId.outcome)
+        assertTrue(differentExternalId.documentId != documentId)
+    }
+
+    @Test
+    fun multipartAdapterRejectsNotionSources() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = SourceRecord(UUID.randomUUID(), SourceKind.NOTION, "notion-${UUID.randomUUID()}", null, Clearance.PUBLIC, admin.userId)
+        repository.createSource(source)
+
+        assertThrows(ApiException::class.java) {
+            service.uploadOne(admin, source.id, "page.md", file("content"), null, null, null)
+        }
     }
 
     @Test
