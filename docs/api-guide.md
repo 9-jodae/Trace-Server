@@ -5,7 +5,18 @@
 ## 서버 주소
 
 - 로컬: `http://localhost:8080`
-- 팀 서버(외부 확인용): `http://3.0.74.114:8080` — `/api/health`만 외부에 열려 있습니다. 실제 연동 주소는 프론트 배포 환경에 맞춰 별도로 확정합니다([Issue #8](https://github.com/9-jodae/docs199-Server/issues/8) 참고).
+- 팀 서버: `http://3.0.74.114:8080` — `/api/` 아래 전체(로그인·부서·문서·질문·근거 조회 등)가 외부에 열려 있습니다. CORS는 서버 `.env`의 `CORS_ORIGINS`에 등록된 출처만 허용하므로, 프론트 배포 주소가 정해지면 팀장에게 전달해 등록을 요청하세요([Issue #8](https://github.com/9-jodae/docs199-Server/issues/8) 참고).
+
+### 외부 공개 범위
+
+| 경로 | 외부 공개 | 비고 |
+| --- | --- | --- |
+| `GET /api/health` | O | |
+| `/api/**`(그 외 전체) | O | 모든 메서드. 인증은 `Authorization: Bearer` 토큰, 관리자 전용은 역할 검사 |
+| `/api/internal/**`, `/api/dev/**` | X(404) | 내부 전용(임베딩 중계, ingestion 콜백, 데모 토큰) |
+| `/actuator/**`, `/swagger-ui/**`, `/v3/api-docs/**` | X(404) | |
+
+자세한 경로별 403/401 구분과 배포 설정은 `docs/deployment.md`의 "외부 공개 범위"를 참고하세요.
 
 ## 공통 응답 형식
 

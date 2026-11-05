@@ -16,7 +16,32 @@ docker compose -f compose.prod.yaml ps
 docker compose -f compose.prod.yaml logs --tail=100 app
 ```
 
-스크립트는 원격 변경을 가져온 뒤 브랜치를 checkout하고 fast-forward pull만 수행합니다. PostgreSQL 준비를 기다려 앱을 시작하고, 헬스체크가 2분 안에 성공하지 않으면 실패 코드로 종료합니다. 배포 이미지의 `commit`은 빌드 시 짧은 Git SHA입니다. 외부 확인 주소는 `http://3.0.74.114:8080/api/health`입니다. 외부 8080 포트는 health-gateway가 `/api/health`만 전달하며 그 밖의 경로는 404로 거부합니다. 앱의 인증·문서 API는 서버 loopback `127.0.0.1:18080`에서만 접근합니다. `/actuator/health`는 상세 정보를 노출하지 않습니다.
+스크립트는 원격 변경을 가져온 뒤 브랜치를 checkout하고 fast-forward pull만 수행합니다. PostgreSQL 준비를 기다려 앱을 시작하고, 헬스체크가 2분 안에 성공하지 않으면 실패 코드로 종료합니다. 배포 이미지의 `commit`은 빌드 시 짧은 Git SHA입니다. 외부 확인 주소는 `http://3.0.74.114:8080/api/health`입니다. 외부 8080 포트는 `api-gateway`(nginx, `infra/nginx/gateway.conf`)가 받습니다. 앱 자체는 서버 loopback `127.0.0.1:18080`에만 바인딩되어 게이트웨이를 거치지 않는 직접 접근은 서버 밖에서 불가능합니다. `/actuator/health`는 상세 정보를 노출하지 않습니다.
+
+### 외부 공개 범위
+
+| 경로 | 외부(`0.0.0.0:8080`) | 비고 |
+| --- | --- | --- |
+| `GET /api/health` | 공개 | 메서드는 GET만 허용 |
+| `/api/**`(그 외 전체) | 공개 | 모든 메서드, 로그인·문서·질문 등 전체 API. 인증·권한은 Spring이 그대로 검사 |
+| `/api/internal/**` | 차단(404) | 임베딩 중계(`/api/internal/embeddings`), ingestion 콜백(`/api/internal/ingestion-jobs/{id}/result`) 포함. AI 서버는 같은 Docker 네트워크에서 `app:8080`으로 직접 호출하므로 게이트웨이와 무관하게 동작 |
+| `/api/dev/**` | 차단(404) | 데모용 토큰 발급 등 개발 전용 엔드포인트 |
+| `/actuator/**` | 차단(404) | Spring에서 `/actuator/health`만 permitAll이지만 게이트웨이에서도 막음(이중 방어) |
+| `/swagger-ui/**`, `/v3/api-docs/**` | 차단(404) | prod 프로필에서 Spring도 비활성화(이중 방어) |
+| 그 외 `/api/` 밖 경로 | 차단(404) | |
+
+업로드 용량은 nginx `client_max_body_size`를 Spring의 `MAX_UPLOAD_REQUEST_SIZE`(기본 100MB)보다 여유 있게(150MB) 설정합니다. 질문 API는 최대 70초까지 걸릴 수 있어 `proxy_read_timeout`을 90초로 둡니다.
+
+### 임베딩 중계·AI 콜백이 외부에서 막혀 있는지 확인
+
+서버 밖에서 다음이 모두 404여야 합니다(200이나 다른 응답이면 게이트웨이 설정이 새 나간 것).
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://3.0.74.114:8080/api/internal/embeddings -X POST
+curl -s -o /dev/null -w "%{http_code}\n" http://3.0.74.114:8080/api/internal/ingestion-jobs/00000000-0000-0000-0000-000000000000/result -X POST
+```
+
+서버 안에서는 AI 서버가 같은 Docker 네트워크로 `http://app:8080/api/internal/...`을 직접 호출하므로 위 차단과 무관하게 동작합니다. 노트북에서 임베딩 중계를 쓸 때는 `docs/ai-server-contract.md`의 SSH 터널(`127.0.0.1:18080`) 방법을 그대로 씁니다.
 
 `docker compose -f compose.prod.yaml restart app`으로 앱을 재시작합니다. 로그에는 비밀값, 토큰, 문서 내용, Presigned URL을 남기지 않습니다. PostgreSQL과 Neo4j는 호스트 `127.0.0.1`에만 포트를 열어(AI 팀원의 SSH 터널 접속용, [AI 연동 접속 안내](ai-integration-setup.md) 참고) 외부에는 노출하지 않으며 named volume을 유지합니다. AI 서버는 이번 배포에서 mock 모드입니다.
 
