@@ -8,8 +8,8 @@ spring:
   jpa:
     hibernate.ddl-auto: validate
     open-in-view: false
-  servlet.multipart.max-file-size: ${MAX_UPLOAD_SIZE:20MB}
-  servlet.multipart.max-request-size: ${MAX_UPLOAD_SIZE:20MB}
+  servlet.multipart.max-file-size: ${MAX_UPLOAD_FILE_SIZE:20MB}
+  servlet.multipart.max-request-size: ${MAX_UPLOAD_REQUEST_SIZE:100MB}
 management.endpoints.web.exposure.include: health,info
 management.endpoint.health.show-details: never
 logging.pattern.level: "%5p [requestId=%X{requestId:-}]"

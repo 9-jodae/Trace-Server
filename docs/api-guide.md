@@ -93,6 +93,7 @@ sourceModifiedAt=2026-03-01T00:00:00Z
 ```
 
 - `files`/`paths`는 개수와 순서가 같아야 합니다. `paths`는 소스 내부 상대 경로입니다.
+- 파일별 기본 한도는 20MB(`MAX_UPLOAD_FILE_SIZE`), 요청 전체 기본 한도는 multipart 오버헤드를 포함해 100MB(`MAX_UPLOAD_REQUEST_SIZE`)입니다. 클라이언트는 두 한도 안에 들어오도록 여러 파일을 나눠 전송해야 합니다.
 - `clearance`(`PUBLIC`/`INTERNAL`/`CONFIDENTIAL`), `departmentIds`(반복 가능, 비우면 전체 부서 열람 가능), `minimumPosition`(`STAFF`/`SENIOR`/`MANAGER`/`DIRECTOR`), `ownerDepartmentId`, `author`, `authoredAt`(`YYYY-MM-DD`), `sourceModifiedAt`(ISO 인스턴트, 예: `2026-03-01T00:00:00Z`)는 모두 선택 입력입니다.
 - 소스를 먼저 만들어야 합니다: `POST /api/admin/sources`(`{"kind": "LOCAL"|"OBSIDIAN", "name": "...", "defaultDepartmentId": null, "defaultClearance": "PUBLIC"}`), 목록은 `GET /api/admin/sources`. `NOTION`은 아직 생성할 수 없습니다.
 - 응답 `data`는 파일 순서에 맞춘 배열, 각 항목은 `{"path", "documentId", "version", "outcome", "reason"}`. `outcome`은 `CREATED`/`UPDATED`/`UNCHANGED`/`EXCLUDED`(사유는 `reason`)입니다.
