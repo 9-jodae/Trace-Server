@@ -177,6 +177,37 @@ class GraphIntegrationTests : IntegrationTestBase() {
     }
 
     @Test
+    private fun topicLimitTestVersion(): UUID {
+        val systemAdmin = principal("system.admin@local.docs199")
+        val source = documents.createSource(systemAdmin, SourceKind.LOCAL, "topic-limits-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val documentId = createDocument(systemAdmin, source.id, "topic-limits-${UUID.randomUUID()}")
+        return jdbc.queryForObject(
+            "SELECT id FROM document_versions WHERE document_id = ? ORDER BY version_number LIMIT 1",
+            UUID::class.java,
+            documentId,
+        )!!
+    }
+
+    @Test
+    fun topicStorageRejectsMoreThanThreeTopics() {
+        val versionId = topicLimitTestVersion()
+        listOf("topic-one", "topic-two", "topic-three").forEach { topic ->
+            jdbc.update("INSERT INTO document_topics (document_version_id, topic) VALUES (?, ?)", versionId, topic)
+        }
+        assertThrows(DataIntegrityViolationException::class.java) {
+            jdbc.update("INSERT INTO document_topics (document_version_id, topic) VALUES (?, ?)", versionId, "topic-four")
+        }
+    }
+
+    @Test
+    fun topicStorageRejectsOverlongValues() {
+        val versionId = topicLimitTestVersion()
+        assertThrows(DataIntegrityViolationException::class.java) {
+            jdbc.update("INSERT INTO document_topics (document_version_id, topic) VALUES (?, ?)", versionId, "x".repeat(101))
+        }
+    }
+
+    @Test
     fun graphFiltersNodesAndEdgesAndReturnsNotFoundForHiddenCenter() {
         val systemAdmin = principal("system.admin@local.docs199")
         val hr = principal("hr.staff@local.docs199")

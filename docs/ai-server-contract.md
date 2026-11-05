@@ -204,6 +204,8 @@ Spring은 청크 ID를 UUID로 해석하고 DB에서 현재 버전과 `AccessPol
 
 ## 문서 주제와 그래프 간선 (Issue #81)
 
+DB는 버전당 최대 3개, 주제당 최대 100자를 강제합니다.
+
 문서 적재 단계에서 문서별 주제 1~3개를 생성하면, AI는 해당 문서 버전의 주제를 PostgreSQL `document_topics(document_version_id, topic)`에 기록합니다. 주제는 앞뒤 공백을 제거하고 같은 버전 안에서 대소문자를 무시해 중복을 막습니다. 같은 버전을 다시 처리할 때는 해당 버전 행을 삭제한 뒤 새 주제를 넣어 멱등하게 교체합니다.
 
 Flyway V15가 `ai_app`에 `document_topics`의 `INSERT`, `DELETE` 권한만 부여합니다. `SELECT` 권한은 없습니다. 다른 테이블 권한은 변경하지 않습니다. AI 적재기는 topic 생성 기능을 기본 비활성화하고 시연 문서에 한정해 사용해야 합니다. AI 저장소의 설정 키와 기능 활성화 시점은 AI 팀이 정합니다.
