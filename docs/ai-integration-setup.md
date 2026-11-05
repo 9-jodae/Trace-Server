@@ -26,6 +26,36 @@ AI 서버가 같은 Compose 네트워크에 올라가면(터널이 아니라 컨
 - Neo4j: `neo4j:7687`(Bolt), `neo4j:7474`(브라우저/HTTP)
 - Spring 서버: `app:8080`
 
+## AI 서버 연결
+
+AI 서버(FastAPI, `POST /api/v1/agent/chat`, 포트 8000)를 팀 서버에 실제로 연결할 때 두 가지 방식이 있습니다.
+
+1. **같은 Compose 서비스로 올리기**: `compose.prod.yaml`에 주석 처리된 `ai` 서비스를 그대로 사용합니다. 같은 Docker 네트워크에 올라가므로 Spring은 `http://ai:8000`으로 접근합니다. 포트를 호스트에 공개할 필요가 없습니다.
+2. **서버 venv로 직접 띄우기**: AI 팀이 `~/docs199-Server`가 아닌 별도 경로에서 Python venv로 AI 서버를 기동합니다. 이때 AI 서버는 `0.0.0.0:8000`으로 바인딩해야 Spring 컨테이너가 접근할 수 있습니다. Spring 컨테이너에서는 `http://host.docker.internal:8000`으로 접근합니다(`compose.prod.yaml`의 `app` 서비스에 `extra_hosts: ["host.docker.internal:host-gateway"]`가 추가되어 있어 컨테이너 안에서 호스트로 되돌아가는 이 이름이 풀립니다).
+
+어느 방식이든 AI 서버의 8000 포트를 **외부 공개용 보안 그룹에 추가로 열 필요는 없습니다**. 서버의 보안 그룹 자체는 이미 열려 있을 수 있으므로, AI 서버는 반드시 모든 요청에서 `X-Internal-Secret` 헤더 값이 서버 `.env`의 `INTERNAL_SECRET`과 같은지 검증해야 합니다(ingest 콜백과 같은 비밀값).
+
+### Spring을 mock에서 http로 전환
+
+1. 서버 `~/docs199-Server/.env`에서 `AI_MODE=http`로, `AI_BASE_URL`을 방식 1이면 `http://ai:8000`, 방식 2면 `http://host.docker.internal:8000`으로 바꿉니다.
+2. `flock /tmp/docs199-deploy.lock scripts/deploy.sh develop`로 잠금 배포합니다.
+3. 외부 `GET /api/health` 응답의 커밋이 최신 `develop`인지 확인합니다.
+
+### 되돌리기
+
+`.env`의 `AI_MODE`를 `mock`으로 되돌리고 같은 방식으로 잠금 배포합니다(`AI_BASE_URL`은 그대로 둬도 무방합니다. `mock` 모드에서는 쓰이지 않습니다).
+
+### `scripts/switch-ai-mode.sh`
+
+위 `.env` 수정과 잠금 배포를 한 번에 수행하는 스크립트입니다.
+
+```bash
+scripts/switch-ai-mode.sh http http://host.docker.internal:8000   # mock -> http 전환
+scripts/switch-ai-mode.sh mock                                     # http -> mock 되돌리기
+```
+
+`.env`의 `AI_MODE`·`AI_BASE_URL` 두 값만 바꾸고(다른 값은 건드리지 않음) 수정 전 `.env`를 타임스탬프 백업 파일로 남긴 뒤 잠금 배포까지 실행합니다. 비밀값은 화면에 출력하지 않습니다.
+
 ## `ai_app` 계정이 할 수 있는 것
 
 - 읽기(`SELECT`)만: `documents`, `document_versions`, `document_departments`, `sources`, `departments`, `ingestion_jobs`
