@@ -116,24 +116,32 @@ class QuestionService(
         val declaredAnswerType =
             response.answerType
                 ?: if (response.sources.isEmpty()) AnswerType.NO_EVIDENCE else AnswerType.ANSWER
+        val suppressUnverifiedAnswer =
+            (declaredAnswerType == AnswerType.ANSWER && visible.isEmpty()) ||
+                (response.sources.isNotEmpty() && visible.isEmpty()) ||
+                (response.evidence.isNotEmpty() && evidence.isEmpty()) ||
+                (response.keywords.isNotEmpty() && keywords.isEmpty())
         val answerType =
-            if (declaredAnswerType == AnswerType.ANSWER && visible.isEmpty()) {
+            if (suppressUnverifiedAnswer) {
                 AnswerType.NO_EVIDENCE
             } else {
                 declaredAnswerType
             }
         val answer =
-            if (declaredAnswerType == AnswerType.ANSWER && visible.isEmpty()) {
+            if (suppressUnverifiedAnswer) {
                 "관련 문서를 찾지 못했습니다."
             } else {
                 response.answer
             }
+        val safeSources = if (suppressUnverifiedAnswer) emptyList() else visible
+        val safeEvidence = if (suppressUnverifiedAnswer) emptyList() else evidence
+        val safeKeywords = if (suppressUnverifiedAnswer) emptyList() else keywords
         conversations.addMessage(
             principal,
             conversation.id,
             MessageRole.ASSISTANT,
             answer,
-            (visible.map { UUID.fromString(it.id) } + evidence.map { UUID.fromString(it.chunkId) }).toSet(),
+            (safeSources.map { UUID.fromString(it.id) } + safeEvidence.map { UUID.fromString(it.chunkId) }).toSet(),
         )
         return QuestionResponse(
             conversation.id,
@@ -141,11 +149,11 @@ class QuestionService(
             answerType,
             response.route,
             response.contextProbability,
-            visible,
-            evidence,
+            safeSources,
+            safeEvidence,
             response.failedSources,
             response.fallbackReason,
-            keywords,
+            safeKeywords,
         )
     }
 

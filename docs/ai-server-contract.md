@@ -185,7 +185,7 @@ AI의 `documentId`, `versionId`, `source` 값은 신뢰하지 않습니다. `chu
 
 ## 답변 종류 (`answerType`, Issue #76)
 
-AI 응답은 `ANSWER`, `NO_EVIDENCE`, `CLARIFICATION`, `SMALL_TALK` 중 하나를 보냅니다. 필드 생략 시 Spring은 원본 `sources`가 비면 `NO_EVIDENCE`, 하나 이상이면 `ANSWER`로 간주합니다. Spring이 `ANSWER`의 출처를 권한 검증 후 모두 거르면 원본 답변을 노출하지 않고 `NO_EVIDENCE`와 `관련 문서를 찾지 못했습니다.`를 반환합니다.
+AI 응답은 `ANSWER`, `NO_EVIDENCE`, `CLARIFICATION`, `SMALL_TALK` 중 하나를 보냅니다. 필드 생략 시 Spring은 원본 `sources`가 비면 `NO_EVIDENCE`, 하나 이상이면 `ANSWER`로 간주합니다. `ANSWER`의 출처가 모두 권한 필터에서 제거되거나 출처·근거·키워드 중 하나의 목록 전체가 검증에서 제외되면 AI 선언 유형과 관계없이 원본 답변을 노출하지 않고 `NO_EVIDENCE`와 `관련 문서를 찾지 못했습니다.`를 반환합니다.
 
 대화 이력에는 `answerType`을 저장하지 않아 이력 조회 후 일부 답변 유형이 복원되지 않을 수 있습니다.
 

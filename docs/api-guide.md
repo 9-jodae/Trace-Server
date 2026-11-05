@@ -270,6 +270,6 @@ Authorization: Bearer <token>
 
 ## 질문 응답 종류 (`answerType`, Issue #76)
 
-응답의 `answerType`은 `ANSWER`, `NO_EVIDENCE`, `CLARIFICATION`, `SMALL_TALK` 중 하나입니다. `NO_EVIDENCE`일 때만 재시도 UI를 표시하고, 나머지는 `answer`를 표시합니다. AI가 필드를 생략하면 원본 `sources`가 비었을 때 `NO_EVIDENCE`, 있으면 `ANSWER`로 추론합니다. `ANSWER`의 출처가 접근 권한 필터링 후 모두 제거되면 답변을 `관련 문서를 찾지 못했습니다.`로 바꾸고 `NO_EVIDENCE`를 반환합니다.
+응답의 `answerType`은 `ANSWER`, `NO_EVIDENCE`, `CLARIFICATION`, `SMALL_TALK` 중 하나입니다. `NO_EVIDENCE`일 때만 재시도 UI를 표시하고, 나머지는 `answer`를 표시합니다. AI가 필드를 생략하면 원본 `sources`가 비었을 때 `NO_EVIDENCE`, 있으면 `ANSWER`로 추론합니다. `ANSWER`의 출처가 모두 접근 권한 필터링에서 제거되거나 AI가 보낸 출처·근거·키워드 중 하나의 목록 전체가 검증에서 제외되면 답변을 `관련 문서를 찾지 못했습니다.`로 바꾸고 `NO_EVIDENCE`를 반환합니다. AI가 선언한 유형은 이 검증을 우회하지 못합니다.
 
 대화 이력에 `answerType`을 저장하지 않습니다. 대화를 다시 열면 과거의 되묻기·일상 대화가 정확히 복원되지 않을 수 있습니다.

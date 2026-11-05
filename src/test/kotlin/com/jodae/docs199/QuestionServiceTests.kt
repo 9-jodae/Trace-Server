@@ -395,6 +395,8 @@ class QuestionServiceTests : IntegrationTestBase() {
         val client = FakeAgentChatClient()
         // ...but the AI response falsely claims it belongs to the visible (accessible) document.
         client.nextSources = listOf(AgentSource(chunkFromHiddenDocument.toString(), "공개인 척", "공개 문서", visibleId.toString()))
+        client.nextAnswerType = AnswerType.CLARIFICATION
+        client.nextAnswer = "기밀 내용을 바탕으로 한 되묻기"
         val service = QuestionService(conversations, conversationRepository, jdbc, policy, client)
 
         val response = service.ask(hr, null, "질문")
@@ -402,6 +404,13 @@ class QuestionServiceTests : IntegrationTestBase() {
         assertEquals(0, response.sources.size)
         assertEquals(AnswerType.NO_EVIDENCE, response.answerType)
         assertEquals("관련 문서를 찾지 못했습니다.", response.answer)
+        val savedAnswer =
+            conversations
+                .detail(hr, response.conversationId)
+                .messages
+                .last()
+                .content
+        assertEquals("관련 문서를 찾지 못했습니다.", savedAnswer)
     }
 
     @Test
