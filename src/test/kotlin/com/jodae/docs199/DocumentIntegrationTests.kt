@@ -274,6 +274,67 @@ class DocumentIntegrationTests : IntegrationTestBase() {
     }
 
     @Test
+    fun unchangedUploadUpdatesOnlyProvidedMetadataWithoutCreatingVersionOrJob() {
+        val admin = principal("doc.admin@local.docs199")
+        val source = service.createSource(admin, SourceKind.LOCAL, "메타데이터-${UUID.randomUUID()}", null, Clearance.PUBLIC)
+        val originalDate = LocalDate.of(2026, 1, 1)
+        val originalModified = Instant.now().minusSeconds(3600).truncatedTo(ChronoUnit.MICROS)
+        val content = "같은 파일 내용"
+        val documentId =
+            service
+                .uploadOne(
+                    admin,
+                    source.id,
+                    "metadata.md",
+                    file(content),
+                    null,
+                    null,
+                    null,
+                    author = "작성자 A",
+                    authoredAt = originalDate,
+                    sourceModifiedAt = originalModified,
+                    displayTitle = "원래 제목",
+                ).documentId!!
+
+        repeat(30) {
+            if (service.detail(admin, documentId, true).job?.status != JobStatus.DONE) Thread.sleep(100)
+        }
+        val initialDetail = service.detail(admin, documentId, true)
+        val initialJobId = initialDetail.job!!.id
+
+        val result =
+            service.uploadOne(
+                admin,
+                source.id,
+                "metadata.md",
+                file(content),
+                null,
+                null,
+                null,
+                author = "작성자 B",
+                authoredAt = LocalDate.of(2026, 2, 2),
+                displayTitle = "수정된 제목",
+            )
+
+        assertEquals("UNCHANGED", result.outcome)
+        assertEquals(1, repository.document(documentId)?.currentVersion)
+        assertEquals(1, repository.versions(documentId).size)
+        assertEquals("작성자 B", repository.document(documentId)?.author)
+        assertEquals(LocalDate.of(2026, 2, 2), repository.document(documentId)?.authoredAt)
+        assertEquals(originalModified, repository.document(documentId)?.sourceModifiedAt)
+        assertEquals("수정된 제목", repository.document(documentId)?.title)
+        assertEquals(initialJobId, service.detail(admin, documentId, true).job?.id)
+
+        val noMetadataUpdate = service.uploadOne(admin, source.id, "metadata.md", file(content), null, null, null)
+        assertEquals("UNCHANGED", noMetadataUpdate.outcome)
+        assertEquals("작성자 B", repository.document(documentId)?.author)
+        assertEquals(LocalDate.of(2026, 2, 2), repository.document(documentId)?.authoredAt)
+        assertEquals(originalModified, repository.document(documentId)?.sourceModifiedAt)
+        assertEquals("수정된 제목", repository.document(documentId)?.title)
+        assertEquals(initialJobId, service.detail(admin, documentId, true).job?.id)
+    }
+
+    @Test
     fun aiCallbackFillsMissingAuthorButNeverOverwritesUserInput() {
         val admin = principal("doc.admin@local.docs199")
         val source = service.createSource(admin, SourceKind.LOCAL, "콜백메타-${UUID.randomUUID()}", null, Clearance.PUBLIC)
